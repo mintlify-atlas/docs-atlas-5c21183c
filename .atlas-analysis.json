@@ -1,0 +1,162 @@
+{
+  "projectType": "saas",
+  "projectName": "PC Fix",
+  "projectDescription": "Modern e-commerce platform for high-performance PC hardware with integrated inventory management, payment processing, and admin dashboard.",
+  "theme": "almond",
+  "primaryColor": "#151c3b",
+  "lightColor": "#5e6c89",
+  "darkColor": "#7f91b4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/monorepo",
+              "architecture/frontend",
+              "architecture/backend",
+              "architecture/database"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/authentication",
+              "features/shopping-cart",
+              "features/payment-processing",
+              "features/inventory-management",
+              "features/admin-dashboard"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/environment-setup",
+              "guides/docker-deployment",
+              "guides/database-migrations",
+              "guides/testing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login",
+              "api/auth/register",
+              "api/auth/google-oauth",
+              "api/auth/password-reset"
+            ]
+          },
+          {
+            "group": "Products",
+            "pages": [
+              "api/products/list",
+              "api/products/create",
+              "api/products/update",
+              "api/products/delete"
+            ]
+          },
+          {
+            "group": "Cart & Checkout",
+            "pages": [
+              "api/cart/get",
+              "api/cart/add-item",
+              "api/cart/update-item",
+              "api/cart/remove-item"
+            ]
+          },
+          {
+            "group": "Sales",
+            "pages": [
+              "api/sales/create",
+              "api/sales/list",
+              "api/sales/get-by-id",
+              "api/sales/update-status"
+            ]
+          },
+          {
+            "group": "Admin",
+            "pages": [
+              "api/admin/stats",
+              "api/admin/users",
+              "api/admin/categories",
+              "api/admin/brands"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Payment Providers",
+            "pages": [
+              "integrations/mercadopago",
+              "integrations/crypto-payments"
+            ]
+          },
+          {
+            "group": "Cloud Services",
+            "pages": [
+              "integrations/cloudinary",
+              "integrations/resend-email",
+              "integrations/sentry"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Hybrid rendering with Astro SSR and React islands for extreme performance",
+    "Real-time inventory management with automated stock alerts",
+    "Multi-payment support (MercadoPago, crypto USDT, offline payments)",
+    "Comprehensive admin dashboard with analytics and CRUD operations",
+    "Secure authentication with JWT and Google OAuth integration",
+    "Shopping cart with abandoned cart email recovery",
+    "Technical support ticket system for customer inquiries",
+    "Product favorites and wishlists for registered users",
+    "Monorepo architecture with NPM workspaces",
+    "Docker containerization for consistent development environments"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/login - User authentication",
+    "POST /api/auth/register - User registration",
+    "POST /api/auth/google - Google OAuth login",
+    "GET /api/products - List all products",
+    "POST /api/products - Create new product (admin)",
+    "PUT /api/products/:id - Update product (admin)",
+    "DELETE /api/products/:id - Delete product (admin)",
+    "GET /api/cart - Get user's cart",
+    "POST /api/cart/items - Add item to cart",
+    "PUT /api/cart/items/:id - Update cart item quantity",
+    "DELETE /api/cart/items/:id - Remove item from cart",
+    "POST /api/sales - Create new sale",
+    "GET /api/sales - List all sales (admin)",
+    "GET /api/sales/:id - Get sale details",
+    "GET /api/categories - List all categories",
+    "POST /api/categories - Create category (admin)",
+    "GET /api/brands - List all brands",
+    "POST /api/brands - Create brand (admin)",
+    "GET /api/stats - Get dashboard statistics (admin)",
+    "POST /api/favorites - Add product to favorites",
+    "DELETE /api/favorites/:id - Remove from favorites",
+    "POST /api/technical - Submit technical support request",
+    "GET /api/config - Get site configuration"
+  ]
+}
