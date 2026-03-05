@@ -1,0 +1,682 @@
+---
+title: "Testing"
+description: "Run unit tests, integration tests, and E2E tests with Vitest and Playwright"
+---
+
+PC Fix includes a comprehensive testing suite covering unit tests, integration tests, and end-to-end tests. This guide covers running tests, writing new tests, and integrating testing into your development workflow.
+
+## Testing Stack
+
+PC Fix uses modern testing tools:
+
+- **Vitest**: Fast unit and integration tests for both frontend and backend
+- **Playwright**: End-to-end browser testing
+- **Supertest**: HTTP integration testing for API endpoints
+- **Testing Library**: React component testing utilities
+
+<Note>
+All packages include test scripts. Run tests from the monorepo root or individual packages.
+</Note>
+
+## Running Tests
+
+### Quick Start
+
+<Tabs>
+  <Tab title="All Tests">
+    Run tests across the entire monorepo:
+    ```bash
+    npm test
+    ```
+  </Tab>
+  <Tab title="Backend Tests">
+    Test API endpoints and services:
+    ```bash
+    cd packages/api
+    npm test
+    ```
+  </Tab>
+  <Tab title="Frontend Tests">
+    Test React components and utilities:
+    ```bash
+    cd packages/web
+    npm test
+    ```
+  </Tab>
+  <Tab title="E2E Tests">
+    Run Playwright browser tests:
+    ```bash
+    cd packages/web
+    npm run e2e
+    ```
+  </Tab>
+</Tabs>
+
+### Test Modes
+
+<CodeGroup>
+
+```bash Watch Mode
+# Run tests in watch mode (re-run on file changes)
+npm test -- --watch
+```
+
+```bash Coverage
+# Generate coverage report
+npm test -- --coverage
+```
+
+```bash Specific Files
+# Run specific test file
+npm test -- auth.test.ts
+
+# Run tests matching pattern
+npm test -- --grep "authentication"
+```
+
+```bash UI Mode (Vitest)
+# Open Vitest UI
+npm test -- --ui
+```
+
+</CodeGroup>
+
+## Backend Testing (API)
+
+### Unit Tests Example
+
+```typescript src/modules/auth/auth.service.test.ts lines
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { AuthService } from './auth.service';
+import { prisma } from '../../shared/database/prismaClient';
+import bcrypt from 'bcryptjs';
+
+vi.mock('../../shared/database/prismaClient');
+vi.mock('bcryptjs');
+
+describe('AuthService', () => {
+  let authService: AuthService;
+
+  beforeEach(() => {
+    authService = new AuthService();
+    vi.clearAllMocks();
+  });
+
+  describe('register', () => {
+    it('should create a new user with hashed password', async () => {
+      const userData = {
+        email: 'test@example.com',
+        nombre: 'Test',
+        apellido: 'User',
+        password: 'password123',
+      };
+
+      vi.mocked(bcrypt.hash).mockResolvedValue('hashedPassword123' as never);
+      vi.mocked(prisma.user.create).mockResolvedValue({
+        id: 1,
+        ...userData,
+        password: 'hashedPassword123',
+        role: 'USER',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      const result = await authService.register(userData);
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: {
+          ...userData,
+          password: 'hashedPassword123',
+        },
+      });
+      expect(result.email).toBe('test@example.com');
+    });
+
+    it('should throw error if email already exists', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 1 } as any);
+
+      await expect(
+        authService.register({
+          email: 'existing@example.com',
+          nombre: 'Test',
+          apellido: 'User',
+          password: 'password123',
+        })
+      ).rejects.toThrow('Email already in use');
+    });
+  });
+});
+```
+
+### Integration Tests Example
+
+```typescript src/modules/products/products.routes.test.ts lines
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import request from 'supertest';
+import app from '../../server';
+import { prisma } from '../../shared/database/prismaClient';
+
+describe('Products API', () => {
+  let adminToken: string;
+  let testProductId: number;
+
+  beforeAll(async () => {
+    // Login as admin to get token
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: 'admin@pcfix.com',
+        password: 'admin123',
+      });
+    adminToken = response.body.token;
+  });
+
+  afterAll(async () => {
+    // Cleanup test data
+    await prisma.producto.deleteMany({
+      where: { nombre: { contains: 'TEST_' } },
+    });
+    await prisma.$disconnect();
+  });
+
+  describe('GET /api/products', () => {
+    it('should return paginated products', async () => {
+      const response = await request(app)
+        .get('/api/products')
+        .query({ page: 1, limit: 10 });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('products');
+      expect(response.body).toHaveProperty('pagination');
+      expect(Array.isArray(response.body.products)).toBe(true);
+    });
+
+    it('should filter products by category', async () => {
+      const response = await request(app)
+        .get('/api/products')
+        .query({ categoryId: 1 });
+
+      expect(response.status).toBe(200);
+      response.body.products.forEach((product: any) => {
+        expect(product.categoriaId).toBe(1);
+      });
+    });
+  });
+
+  describe('POST /api/products', () => {
+    it('should create a new product (admin only)', async () => {
+      const newProduct = {
+        nombre: 'TEST_RTX_4090',
+        descripcion: 'Test graphics card',
+        precio: 1999.99,
+        stock: 5,
+        categoriaId: 1,
+        marcaId: 1,
+      };
+
+      const response = await request(app)
+        .post('/api/products')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(newProduct);
+
+      expect(response.status).toBe(201);
+      expect(response.body.nombre).toBe('TEST_RTX_4090');
+      expect(response.body.precio).toBe(1999.99);
+      
+      testProductId = response.body.id;
+    });
+
+    it('should reject unauthorized requests', async () => {
+      const response = await request(app)
+        .post('/api/products')
+        .send({ nombre: 'Unauthorized Product' });
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('PUT /api/products/:id', () => {
+    it('should update product (admin only)', async () => {
+      const updates = { precio: 1899.99, stock: 10 };
+
+      const response = await request(app)
+        .put(`/api/products/${testProductId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(updates);
+
+      expect(response.status).toBe(200);
+      expect(response.body.precio).toBe(1899.99);
+      expect(response.body.stock).toBe(10);
+    });
+  });
+});
+```
+
+## Frontend Testing (Web)
+
+### Component Tests Example
+
+```typescript src/components/store/ProductCard.test.tsx lines
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { ProductCard } from './ProductCard';
+import { useCartStore } from '../../stores/cartStore';
+
+vi.mock('../../stores/cartStore');
+
+describe('ProductCard', () => {
+  const mockProduct = {
+    id: '1',
+    nombre: 'RTX 4090',
+    descripcion: 'NVIDIA GeForce RTX 4090',
+    precio: 2499.99,
+    stock: 5,
+    imagenes: [{ url: '/test-image.jpg' }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(useCartStore).mockReturnValue({
+      addItem: vi.fn(),
+      items: [],
+    } as any);
+  });
+
+  it('should render product information', () => {
+    render(<ProductCard product={mockProduct} />);
+
+    expect(screen.getByText('RTX 4090')).toBeInTheDocument();
+    expect(screen.getByText('$2,499.99')).toBeInTheDocument();
+    expect(screen.getByText('5 in stock')).toBeInTheDocument();
+  });
+
+  it('should call addItem when Add to Cart clicked', () => {
+    const mockAddItem = vi.fn();
+    vi.mocked(useCartStore).mockReturnValue({
+      addItem: mockAddItem,
+      items: [],
+    } as any);
+
+    render(<ProductCard product={mockProduct} />);
+
+    const addButton = screen.getByRole('button', { name: /add to cart/i });
+    fireEvent.click(addButton);
+
+    expect(mockAddItem).toHaveBeenCalledWith({
+      productoId: '1',
+      quantity: 1,
+    });
+  });
+
+  it('should show out of stock message when stock is 0', () => {
+    render(<ProductCard product={{ ...mockProduct, stock: 0 }} />);
+
+    expect(screen.getByText(/out of stock/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add to cart/i })).toBeDisabled();
+  });
+});
+```
+
+### Store Tests Example
+
+```typescript src/stores/cartStore.test.ts lines
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { useCartStore } from './cartStore';
+
+describe('CartStore', () => {
+  beforeEach(() => {
+    // Reset store before each test
+    useCartStore.getState().clearCart();
+  });
+
+  it('should add item to cart', () => {
+    const { result } = renderHook(() => useCartStore());
+
+    act(() => {
+      result.current.addItem({ productoId: '1', quantity: 2 });
+    });
+
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].productoId).toBe('1');
+    expect(result.current.items[0].quantity).toBe(2);
+  });
+
+  it('should increase quantity if item already in cart', () => {
+    const { result } = renderHook(() => useCartStore());
+
+    act(() => {
+      result.current.addItem({ productoId: '1', quantity: 2 });
+      result.current.addItem({ productoId: '1', quantity: 3 });
+    });
+
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.items[0].quantity).toBe(5);
+  });
+
+  it('should calculate total price correctly', () => {
+    const { result } = renderHook(() => useCartStore());
+
+    act(() => {
+      result.current.addItem({ productoId: '1', quantity: 2, precio: 100 });
+      result.current.addItem({ productoId: '2', quantity: 1, precio: 50 });
+    });
+
+    expect(result.current.total).toBe(250);
+  });
+
+  it('should remove item from cart', () => {
+    const { result } = renderHook(() => useCartStore());
+
+    act(() => {
+      result.current.addItem({ productoId: '1', quantity: 2 });
+      result.current.removeItem('1');
+    });
+
+    expect(result.current.items).toHaveLength(0);
+  });
+});
+```
+
+## End-to-End Testing (Playwright)
+
+### E2E Test Example
+
+```typescript tests/e2e/checkout.spec.ts lines
+import { test, expect } from '@playwright/test';
+
+test.describe('Checkout Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    // Navigate to store
+    await page.goto('http://localhost:4321');
+  });
+
+  test('should complete full checkout process', async ({ page }) => {
+    // Add product to cart
+    await page.click('[data-testid="product-card-1"]');
+    await page.click('[data-testid="add-to-cart"]');
+    
+    // Verify cart badge updated
+    await expect(page.locator('[data-testid="cart-badge"]')).toHaveText('1');
+
+    // Go to cart
+    await page.click('[data-testid="cart-icon"]');
+    await expect(page).toHaveURL(/.*\/checkout/);
+
+    // Fill shipping information
+    await page.fill('[name="nombre"]', 'John');
+    await page.fill('[name="apellido"]', 'Doe');
+    await page.fill('[name="email"]', 'john@example.com');
+    await page.fill('[name="direccion"]', '123 Main St');
+    await page.fill('[name="telefono"]', '1234567890');
+
+    // Select payment method
+    await page.click('[data-testid="payment-method-mercadopago"]');
+
+    // Submit order
+    await page.click('[data-testid="submit-order"]');
+
+    // Verify success
+    await expect(page.locator('[data-testid="order-confirmation"]')).toBeVisible();
+    await expect(page.locator('[data-testid="order-number"]')).toBeVisible();
+  });
+
+  test('should validate required fields', async ({ page }) => {
+    // Add product and go to checkout
+    await page.click('[data-testid="product-card-1"]');
+    await page.click('[data-testid="add-to-cart"]');
+    await page.click('[data-testid="cart-icon"]');
+
+    // Try to submit without filling required fields
+    await page.click('[data-testid="submit-order"]');
+
+    // Check for validation errors
+    await expect(page.locator('text=Email is required')).toBeVisible();
+    await expect(page.locator('text=Phone is required')).toBeVisible();
+  });
+
+  test('should handle out of stock products', async ({ page }) => {
+    // Navigate to out-of-stock product
+    await page.goto('http://localhost:4321/producto/out-of-stock-item');
+
+    // Verify add to cart button is disabled
+    const addButton = page.locator('[data-testid="add-to-cart"]');
+    await expect(addButton).toBeDisabled();
+    await expect(page.locator('text=Out of Stock')).toBeVisible();
+  });
+});
+```
+
+### Playwright Configuration
+
+```typescript playwright.config.ts lines
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests/e2e',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  use: {
+    baseURL: 'http://localhost:4321',
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:4321',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+```
+
+## Test Coverage
+
+Generate coverage reports:
+
+```bash
+# Backend coverage
+cd packages/api
+npm test -- --coverage
+
+# Frontend coverage
+cd packages/web
+npm test -- --coverage
+```
+
+Coverage reports are generated in `coverage/` directories.
+
+<Tip>
+Aim for at least 80% code coverage for critical paths like authentication, payment processing, and inventory management.
+</Tip>
+
+## CI/CD Integration
+
+Add tests to your CI pipeline:
+
+```yaml .github/workflows/test.yml lines
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/api
+      - name: Run tests
+        run: npm test -- --coverage
+        working-directory: packages/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/web
+      - name: Run tests
+        run: npm test -- --coverage
+        working-directory: packages/web
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+      - name: Run E2E tests
+        run: npm run e2e
+        working-directory: packages/web
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report
+          path: packages/web/playwright-report/
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Write Tests First (TDD)">
+    Write failing tests before implementing features:
+    ```bash
+    # 1. Write test
+    npm test -- --watch auth.test.ts
+    
+    # 2. Implement feature until test passes
+    # 3. Refactor
+    ```
+  </Step>
+  <Step title="Test User Workflows">
+    Focus on user-facing functionality, not implementation details:
+    ```typescript
+    // Good: Test user behavior
+    it('should allow user to login with valid credentials', async () => {});
+    
+    // Bad: Test implementation
+    it('should call bcrypt.compare with correct arguments', async () => {});
+    ```
+  </Step>
+  <Step title="Use Realistic Test Data">
+    Use realistic data that matches production patterns:
+    ```typescript
+    const testUser = {
+      email: 'john.doe@example.com',
+      nombre: 'John',
+      apellido: 'Doe',
+      telefono: '+54 9 11 1234-5678',
+    };
+    ```
+  </Step>
+  <Step title="Clean Up Test Data">
+    Always clean up after tests:
+    ```typescript
+    afterAll(async () => {
+      await prisma.user.deleteMany({ where: { email: { contains: 'test_' } } });
+      await prisma.$disconnect();
+    });
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Tests timing out">
+    Increase test timeout:
+    ```typescript
+    // vitest.config.ts
+    export default defineConfig({
+      test: {
+        testTimeout: 30000, // 30 seconds
+      },
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Database connection issues in tests">
+    Use separate test database:
+    ```bash
+    # .env.test
+    DATABASE_URL="postgresql://admin:password123@localhost:5432/pcfix_test"
+    ```
+  </Accordion>
+  
+  <Accordion title="Playwright browser launch failed">
+    Install browsers:
+    ```bash
+    npx playwright install
+    ```
+  </Accordion>
+  
+  <Accordion title="Mock not working">
+    Ensure mocks are defined before imports:
+    ```typescript
+    vi.mock('./module', () => ({ ... }));
+    import { moduleFunction } from './module';
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Architecture" icon="server" href="/architecture/backend">
+    Understand the API structure
+  </Card>
+  <Card title="Frontend Architecture" icon="browser" href="/architecture/frontend">
+    Learn about React components
+  </Card>
+  <Card title="CI/CD" icon="gears" href="https://github.com/martin-ratti/PCFIX-Baru/actions">
+    View CI/CD pipelines
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="https://github.com/martin-ratti/PCFIX-Baru">
+    Contribute to the project
+  </Card>
+</CardGroup>

@@ -1,0 +1,357 @@
+---
+title: 'MercadoPago Integration'
+description: 'Complete guide to integrating MercadoPago payment gateway in PC Fix'
+icon: 'credit-card'
+---
+
+## Overview
+
+PC Fix integrates with MercadoPago to provide a seamless checkout experience for customers. The integration handles preference creation, payment callbacks, and webhook notifications for automatic payment status updates.
+
+## Prerequisites
+
+Before setting up MercadoPago, you'll need:
+
+- A MercadoPago account (production or sandbox)
+- Access token from your MercadoPago dashboard
+- Backend URL configured for callbacks and webhooks
+
+## Environment Variables
+
+Add the following environment variables to your `.env` file:
+
+```bash
+MP_ACCESS_TOKEN=your_mercadopago_access_token
+API_URL=https://your-backend-domain.com
+FRONTEND_URL=https://your-frontend-domain.com
+```
+
+<Note>
+  For testing, you can use MercadoPago's test credentials. Production credentials are required for live transactions.
+</Note>
+
+## Configuration
+
+<Steps>
+  <Step title="Install Dependencies">
+    The MercadoPago SDK is already included in the project:
+
+    ```bash
+    npm install mercadopago
+    ```
+  </Step>
+
+  <Step title="Configure Service">
+    The `MercadoPagoService` is located at `/packages/api/src/shared/services/MercadoPagoService.ts`:
+
+    ```typescript
+    import { MercadoPagoConfig, Preference } from 'mercadopago';
+
+    export class MercadoPagoService {
+        private client: MercadoPagoConfig;
+        private preference: Preference;
+
+        constructor() {
+            const accessToken = process.env.MP_ACCESS_TOKEN;
+            if (!accessToken) {
+                console.warn('MP_ACCESS_TOKEN is not defined');
+            }
+            this.client = new MercadoPagoConfig({ 
+                accessToken: accessToken || '' 
+            });
+            this.preference = new Preference(this.client);
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Set Up Webhooks">
+    Configure your MercadoPago webhook URL in the dashboard:
+
+    ```
+    https://your-backend-domain.com/api/sales/webhook
+    ```
+
+    <Note>
+      Webhooks are only configured for production environments (HTTPS). Local development uses callback URLs only.
+    </Note>
+  </Step>
+</Steps>
+
+## Creating Payment Preferences
+
+When a customer selects MercadoPago as their payment method, the system creates a payment preference:
+
+```typescript
+async createPreference(
+    saleId: number, 
+    items: any[], 
+    payerEmail: string, 
+    shipmentCost?: number
+) {
+    // Map product items to MercadoPago format
+    const mpItems = items.map(item => ({
+        ...item,
+        title: item.title
+    }));
+
+    // Add shipping cost if applicable
+    if (shipmentCost && shipmentCost > 0) {
+        mpItems.push({
+            id: 'shipping',
+            title: 'Costo de envio',
+            quantity: 1,
+            unit_price: shipmentCost,
+            currency_id: 'ARS'
+        });
+    }
+
+    const backendUrl = process.env.API_URL || 
+        `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+    const successUrl = 
+        `${backendUrl}/api/sales/mp-callback?external_reference=${saleId}`;
+
+    const body: any = {
+        items: mpItems,
+        external_reference: String(saleId),
+        back_urls: {
+            success: successUrl,
+            failure: successUrl,
+            pending: successUrl
+        },
+    };
+
+    const result = await this.preference.create({ body });
+    return result.init_point;
+}
+```
+
+### Usage in Sales Controller
+
+The preference is created through the sales controller at `/packages/api/src/modules/sales/sales.controller.ts`:
+
+```typescript
+export const createMPPreference = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const sale = await service.findById(Number(id));
+    
+    if (!sale) {
+        return res.status(404).json({ 
+            success: false, 
+            error: 'Venta no encontrada' 
+        });
+    }
+
+    const items: any[] = sale.lineasVenta.map((line: any) => {
+        const unitPrice = Number(line.subTotal) / Number(line.cantidad);
+        return {
+            id: String(line.productoId),
+            title: line.producto.nombre || 'Producto',
+            quantity: Number(line.cantidad),
+            unit_price: Number(unitPrice.toFixed(2)),
+            currency_id: 'ARS'
+        };
+    });
+
+    const costoEnvioNum = sale.tipoEntrega === 'ENVIO' 
+        ? Number(sale.costoEnvio ?? 0) 
+        : 0;
+    const payerEmail = sale.cliente?.user?.email || 
+        'test_user_123456@testuser.com';
+    const link = await mpService.createPreference(
+        Number(id), 
+        items, 
+        payerEmail, 
+        costoEnvioNum
+    );
+    
+    res.json({ success: true, data: { url: link } });
+};
+```
+
+## Payment Flow
+
+<Steps>
+  <Step title="Customer Initiates Payment">
+    Customer selects MercadoPago and proceeds to checkout. The system creates a sale record with `PENDIENTE_PAGO` status.
+  </Step>
+
+  <Step title="Preference Creation">
+    Frontend calls `POST /api/sales/:id/mp-preference` to generate the MercadoPago checkout URL.
+  </Step>
+
+  <Step title="Customer Completes Payment">
+    Customer is redirected to MercadoPago's checkout page and completes the payment.
+  </Step>
+
+  <Step title="Callback Handling">
+    After payment, MercadoPago redirects to the callback URL:
+
+    ```typescript
+    export const handleMPCallback = async (req: Request, res: Response) => {
+        const { status, external_reference } = req.query;
+        const saleId = Number(external_reference);
+
+        if (saleId && status === 'approved') {
+            await prisma.venta.update({
+                where: { id: saleId },
+                data: {
+                    estado: VentaEstado.APROBADO,
+                    medioPago: 'MERCADOPAGO'
+                }
+            });
+        }
+
+        const frontendUrl = process.env.FRONTEND_URL || 
+            'http://localhost:4321';
+        res.redirect(
+            `${frontendUrl}/cuenta/miscompras?status=${status}`
+        );
+    };
+    ```
+  </Step>
+
+  <Step title="Webhook Confirmation">
+    MercadoPago sends a webhook notification for final confirmation:
+
+    ```typescript
+    export const handleMPWebhook = async (req: Request, res: Response) => {
+        const { type, data } = req.body;
+
+        if (type === 'payment') {
+            const paymentId = data.id;
+            await service.processMPWebhook(paymentId);
+        }
+
+        res.status(200).send('OK');
+    };
+    ```
+  </Step>
+</Steps>
+
+## Webhook Processing
+
+The webhook handler fetches payment details and updates the sale status:
+
+```typescript
+async processMPWebhook(paymentId: string) {
+    const mpService = new MercadoPagoService();
+    const payment = await mpService.getPayment(paymentId);
+
+    if (payment.status === 'approved' && payment.external_reference) {
+        const saleId = Number(payment.external_reference);
+        const sale = await prisma.venta.findUnique({ 
+            where: { id: saleId } 
+        });
+
+        if (sale && sale.estado !== VentaEstado.APROBADO) {
+            await this.updateStatus(saleId, VentaEstado.APROBADO);
+            await this.updatePaymentMethod(saleId, 'MERCADOPAGO');
+        }
+    }
+}
+```
+
+## Price Calculation
+
+<Note>
+  Products in PC Fix have different pricing for MercadoPago vs. other payment methods. When **not** using MercadoPago, a 8% discount is applied (multiplied by 0.92).
+</Note>
+
+```typescript
+let precio = Number(dbProduct.precio);
+if (medioPago !== 'MERCADOPAGO') {
+    precio = precio * 0.92; // 8% discount for non-MP payments
+}
+```
+
+## API Endpoints
+
+<CodeGroup>
+```bash POST /api/sales/:id/mp-preference
+# Create MercadoPago payment preference
+curl -X POST https://api.example.com/api/sales/123/mp-preference \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```bash GET /api/sales/mp-callback
+# Handle MercadoPago callback (redirects user)
+curl "https://api.example.com/api/sales/mp-callback?status=approved&external_reference=123"
+```
+
+```bash POST /api/sales/webhook
+# Receive MercadoPago webhook notifications
+curl -X POST https://api.example.com/api/sales/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "payment",
+    "data": {
+      "id": "1234567890"
+    }
+  }'
+```
+</CodeGroup>
+
+## Testing
+
+### Test User Creation
+
+PC Fix includes a script to create test users in MercadoPago sandbox:
+
+```typescript
+// packages/api/scripts/create-test-user.ts
+import { MercadoPagoConfig } from 'mercadopago';
+
+const response = await fetch(
+    'https://api.mercadopago.com/users/test_user',
+    {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+        }
+    }
+);
+```
+
+### Test Cards
+
+Use these test cards in sandbox mode:
+
+| Card Number | Security Code | Expiration |
+|------------|---------------|------------|
+| 5031 7557 3453 0604 | 123 | 11/25 |
+| 4509 9535 6623 3704 | 123 | 11/25 |
+
+## Troubleshooting
+
+<Warning>
+  If payments are not being updated automatically, verify:
+  - `MP_ACCESS_TOKEN` is correctly set
+  - Webhook URL is configured in MercadoPago dashboard
+  - Your backend is accessible via HTTPS (webhooks require HTTPS)
+  - The `external_reference` matches your sale ID
+</Warning>
+
+### Common Issues
+
+**Preference creation fails:**
+- Check that `MP_ACCESS_TOKEN` is valid
+- Verify item prices are positive numbers
+- Ensure currency_id is set to 'ARS'
+
+**Webhooks not received:**
+- Webhooks only work in production (HTTPS)
+- Check MercadoPago dashboard for delivery errors
+- Verify your endpoint returns 200 OK
+
+**Payment approved but sale not updated:**
+- Check that `external_reference` is being passed correctly
+- Verify database connection is stable
+- Review application logs for errors
+
+## Additional Resources
+
+- [MercadoPago API Documentation](https://www.mercadopago.com/developers)
+- [MercadoPago Node.js SDK](https://github.com/mercadopago/sdk-nodejs)
+- [Testing in Sandbox Mode](https://www.mercadopago.com/developers/en/docs/checkout-pro/additional-content/test-cards)

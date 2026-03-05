@@ -1,97 +1,123 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to PC Fix"
+description: "Modern e-commerce platform for high-performance PC hardware with integrated inventory management, payment processing, and admin dashboard"
 ---
 
-## Setting up
+<div className="bg-gradient-to-r from-[#151c3b] to-[#5e6c89] rounded-xl p-12 text-white mb-8">
+  <h1 className="text-4xl font-bold mb-4">Build Your Ultimate PC</h1>
+  <p className="text-xl mb-6">
+    A modern e-commerce platform built with Astro, React, and Express, delivering extreme performance and seamless shopping experiences for PC hardware enthusiasts.
+  </p>
+  <div className="flex gap-4">
+    <a href="/quickstart" className="inline-block bg-[#5cb85c] hover:bg-[#4ea24e] text-white font-semibold px-6 py-3 rounded-full transition-colors">
+      Get Started
+    </a>
+    <a href="https://github.com/martin-ratti/PCFIX-Baru" className="inline-block bg-white hover:bg-gray-100 text-[#151c3b] font-semibold px-6 py-3 rounded-lg transition-colors">
+      View on GitHub
+    </a>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+## Key Features
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+PC Fix combines cutting-edge web technologies to deliver a best-in-class e-commerce experience.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Extreme Performance" icon="bolt" href="/features/authentication">
+    95+ Lighthouse score with Astro SSR and React islands for instant page loads
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Multi-Payment Support" icon="credit-card" href="/features/payment-processing">
+    MercadoPago, cryptocurrency (USDT), and offline payment options
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Smart Inventory" icon="boxes-stacked" href="/features/inventory-management">
+    Real-time stock tracking with automated alerts and inactive product detection
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Admin Dashboard" icon="chart-line" href="/features/admin-dashboard">
+    Comprehensive analytics, metrics visualization, and full CRUD operations
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Links
 
-Everything you need to create world-class documentation.
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get PC Fix running locally in minutes with Docker
+  </Card>
+  <Card title="Architecture" icon="building" href="/architecture/overview">
+    Understand the monorepo structure and tech stack
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Explore REST API endpoints for all features
+  </Card>
+  <Card title="Environment Setup" icon="gear" href="/guides/environment-setup">
+    Configure environment variables and services
+  </Card>
+  <Card title="Database Schema" icon="database" href="/architecture/database">
+    Learn about the PostgreSQL data model
+  </Card>
+  <Card title="Testing Guide" icon="flask" href="/guides/testing">
+    Run unit tests and E2E tests with Vitest and Playwright
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Tech Stack Highlights
 
-## Need inspiration?
+<Accordion title="Frontend (packages/web)">
+  - **Astro 5**: Hybrid SSR/static rendering with ViewTransitions
+  - **React 18**: Interactive islands for cart, checkout, and admin features
+  - **Tailwind CSS**: Utility-first styling with responsive design
+  - **Zustand**: Lightweight state management for cart and user session
+  - **React Hook Form + Zod**: Type-safe form handling and validation
+</Accordion>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
+<Accordion title="Backend (packages/api)">
+  - **Express 5**: Modern RESTful API with async middleware support
+  - **Prisma 6**: Type-safe ORM with PostgreSQL
+  - **JWT + Bcrypt**: Secure authentication and password hashing
+  - **Rate Limiting + Helmet**: Protection against abuse and security headers
+  - **Node-cron**: Background jobs for cart expiration and alerts
+</Accordion>
+
+<Accordion title="Integrations & DevOps">
+  - **MercadoPago SDK**: Payment gateway integration
+  - **Cloudinary**: CDN for product images
+  - **Google OAuth**: Social login with google-auth-library
+  - **Resend**: Transactional email service
+  - **Sentry**: Error monitoring for frontend and backend
+  - **Docker Compose**: Containerized development environment
+  - **Vercel + Railway**: Production deployment
+</Accordion>
+
+## What Makes PC Fix Different?
+
+<Note>
+  PC Fix achieves a **95+ Lighthouse performance score** by combining Astro's server islands with selective React hydration, ensuring instant page loads without sacrificing interactivity.
+</Note>
+
+Unlike traditional e-commerce platforms, PC Fix is built as a **monorepo** using NPM workspaces, allowing shared TypeScript types, validation schemas, and utilities between frontend and backend. This architectural choice eliminates duplication and ensures type safety across the entire stack.
+
+The platform supports **hybrid payment flows** including traditional credit cards (MercadoPago), cryptocurrency (USDT), and offline payment methods, making it adaptable to diverse market requirements.
+
+## Get Started
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/martin-ratti/PCFIX-Baru.git
+    cd PCFIX-Baru
+    ```
+  </Step>
+  <Step title="Configure environment">
+    Set up `.env` files for both `packages/api` and `packages/web` with your database credentials and API keys.
+  </Step>
+  <Step title="Launch with Docker">
+    ```bash
+    docker-compose up --build
+    ```
+    Access the frontend at `http://localhost:4321` and API at `http://localhost:3002`
+  </Step>
+</Steps>
+
+<Card title="Need Help?" icon="life-ring" href="https://github.com/martin-ratti/PCFIX-Baru">
+  Visit the GitHub repository for issues, discussions, and community support.
 </Card>

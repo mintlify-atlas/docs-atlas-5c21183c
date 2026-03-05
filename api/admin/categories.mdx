@@ -1,0 +1,282 @@
+---
+title: 'Categories'
+description: 'Category management endpoints for organizing products'
+---
+
+## Get All Categories
+
+<RequestExample>
+```http
+GET /api/categories
+```
+</RequestExample>
+
+Retrieves all product categories. Supports hierarchical or flat structure.
+
+### Query Parameters
+
+<ParamField query="flat" type="boolean" default="false">
+  If set to `true`, returns categories in a flat list. Otherwise, returns hierarchical structure with parent-child relationships.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Array of category objects
+  
+  <ResponseField name="id" type="number">
+    Category ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Category name
+  </ResponseField>
+  
+  <ResponseField name="padreId" type="number" nullable>
+    Parent category ID (null for top-level categories)
+  </ResponseField>
+  
+  <ResponseField name="subcategorias" type="array">
+    Child categories (only in hierarchical mode)
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "nombre": "Hardware",
+      "padreId": null,
+      "subcategorias": [
+        {
+          "id": 2,
+          "nombre": "Graphics Cards",
+          "padreId": 1,
+          "subcategorias": []
+        },
+        {
+          "id": 3,
+          "nombre": "Processors",
+          "padreId": 1,
+          "subcategorias": []
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "nombre": "Peripherals",
+      "padreId": null,
+      "subcategorias": []
+    }
+  ]
+}
+```
+</ResponseExample>
+
+---
+
+## Get Category by ID
+
+<RequestExample>
+```http
+GET /api/categories/:id
+```
+</RequestExample>
+
+Retrieves a specific category by its ID.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the category
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Category object
+  
+  <ResponseField name="id" type="number">
+    Category ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Category name
+  </ResponseField>
+  
+  <ResponseField name="padreId" type="number" nullable>
+    Parent category ID
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "nombre": "Graphics Cards",
+    "padreId": 1
+  }
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Categoría no encontrada"
+}
+```
+</ResponseExample>
+
+---
+
+## Create Category
+
+<RequestExample>
+```http
+POST /api/categories
+```
+</RequestExample>
+
+Creates a new product category.
+
+### Authentication
+
+**Note:** This endpoint requires appropriate permissions to create categories.
+
+### Request Body
+
+<ParamField body="nombre" type="string" required>
+  Name of the category
+</ParamField>
+
+<ParamField body="padreId" type="number">
+  Parent category ID (optional, omit for top-level categories)
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "nombre": "Motherboards",
+  "padreId": 1
+}
+```
+</RequestExample>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Created category object
+  
+  <ResponseField name="id" type="number">
+    Category ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Category name
+  </ResponseField>
+  
+  <ResponseField name="padreId" type="number" nullable>
+    Parent category ID
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 5,
+    "nombre": "Motherboards",
+    "padreId": 1
+  }
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Nombre requerido"
+}
+```
+</ResponseExample>
+
+---
+
+## Delete Category
+
+<RequestExample>
+```http
+DELETE /api/categories/:id
+```
+</RequestExample>
+
+Deletes a category. Categories with associated products or subcategories cannot be deleted.
+
+### Authentication
+
+**Note:** This endpoint requires appropriate permissions to delete categories.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the category to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if deletion failed (e.g., category has products or subcategories)
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "message": "Categoría eliminada"
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Cannot delete category with existing products"
+}
+```
+</ResponseExample>

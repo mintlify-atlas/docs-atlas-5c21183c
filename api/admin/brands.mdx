@@ -1,0 +1,266 @@
+---
+title: 'Brands'
+description: 'Brand management endpoints for organizing products by manufacturer'
+---
+
+## Get All Brands
+
+<RequestExample>
+```http
+GET /api/brands
+```
+</RequestExample>
+
+Retrieves all product brands.
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Array of brand objects
+  
+  <ResponseField name="id" type="number">
+    Brand ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Brand name
+  </ResponseField>
+  
+  <ResponseField name="logoUrl" type="string" nullable>
+    URL to the brand logo image (if uploaded)
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "nombre": "NVIDIA",
+      "logoUrl": "/uploads/brands/nvidia-logo.png"
+    },
+    {
+      "id": 2,
+      "nombre": "AMD",
+      "logoUrl": "/uploads/brands/amd-logo.png"
+    },
+    {
+      "id": 3,
+      "nombre": "Intel",
+      "logoUrl": "/uploads/brands/intel-logo.png"
+    }
+  ]
+}
+```
+</ResponseExample>
+
+---
+
+## Get Brand by ID
+
+<RequestExample>
+```http
+GET /api/brands/:id
+```
+</RequestExample>
+
+Retrieves a specific brand by its ID.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the brand
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Brand object
+  
+  <ResponseField name="id" type="number">
+    Brand ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Brand name
+  </ResponseField>
+  
+  <ResponseField name="logoUrl" type="string" nullable>
+    URL to the brand logo image
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "nombre": "NVIDIA",
+    "logoUrl": "/uploads/brands/nvidia-logo.png"
+  }
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Marca no encontrada"
+}
+```
+</ResponseExample>
+
+---
+
+## Create Brand
+
+<RequestExample>
+```http
+POST /api/brands
+Content-Type: multipart/form-data
+```
+</RequestExample>
+
+Creates a new brand with optional logo upload.
+
+### Authentication
+
+**Note:** This endpoint requires appropriate permissions to create brands.
+
+### Request Body
+
+This endpoint accepts `multipart/form-data` for file uploads.
+
+<ParamField body="nombre" type="string" required>
+  Name of the brand
+</ParamField>
+
+<ParamField body="logo" type="file">
+  Brand logo image file (optional)
+  
+  **Accepted formats:** Common image formats (JPG, PNG, etc.)
+</ParamField>
+
+<RequestExample>
+```bash
+curl -X POST https://api.example.com/api/brands \
+  -F "nombre=Corsair" \
+  -F "logo=@/path/to/logo.png"
+```
+</RequestExample>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Created brand object
+  
+  <ResponseField name="id" type="number">
+    Brand ID
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Brand name
+  </ResponseField>
+  
+  <ResponseField name="logoUrl" type="string" nullable>
+    URL to the uploaded brand logo
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 4,
+    "nombre": "Corsair",
+    "logoUrl": "/uploads/brands/corsair-logo.png"
+  }
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Nombre requerido"
+}
+```
+</ResponseExample>
+
+---
+
+## Delete Brand
+
+<RequestExample>
+```http
+DELETE /api/brands/:id
+```
+</RequestExample>
+
+Deletes a brand. Brands with associated products cannot be deleted.
+
+### Authentication
+
+**Note:** This endpoint requires appropriate permissions to delete brands.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the brand to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if deletion failed (e.g., brand has associated products)
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "message": "Marca eliminada"
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "No se pudo eliminar (¿Tiene productos?)"
+}
+```
+</ResponseExample>

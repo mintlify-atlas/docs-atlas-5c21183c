@@ -1,0 +1,207 @@
+---
+title: 'Update Cart Item'
+api: 'POST /api/cart/sync'
+description: 'Update the quantity of an item in the shopping cart'
+---
+
+## Overview
+
+Updates the quantity of an existing product in the user's shopping cart. This endpoint uses the cart synchronization mechanism to modify item quantities.
+
+## Authentication
+
+This endpoint requires authentication. Ensure the user is authorized to modify the cart.
+
+## Request Body
+
+<ParamField body="userId" type="number" required>
+  The unique identifier of the user whose cart you want to modify
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of all cart items with updated quantities
+  
+  <ParamField body="id" type="string" required>
+    The product ID (as a string)
+  </ParamField>
+  
+  <ParamField body="quantity" type="number" required>
+    The new quantity for the product (must be greater than 0)
+  </ParamField>
+</ParamField>
+
+## Cart Item Structure
+
+Each cart item contains:
+- **id**: Product identifier (string format)
+- **quantity**: Number of units (positive integer)
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The complete updated cart object
+  
+  <ResponseField name="id" type="number">
+    Unique identifier for the cart
+  </ResponseField>
+  
+  <ResponseField name="userId" type="number">
+    The ID of the user who owns this cart
+  </ResponseField>
+  
+  <ResponseField name="items" type="array">
+    Array of all cart items with updated quantities
+    
+    <ResponseField name="id" type="number">
+      Unique identifier for the cart item
+    </ResponseField>
+    
+    <ResponseField name="productoId" type="number">
+      The product ID for this cart item
+    </ResponseField>
+    
+    <ResponseField name="quantity" type="number">
+      Updated quantity of the product
+    </ResponseField>
+    
+    <ResponseField name="producto" type="object">
+      Complete product details
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request fails
+</ResponseField>
+
+## Example Request
+
+### Update Single Item Quantity
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 5
+      },
+      {
+        "id": "456",
+        "quantity": 1
+      }
+    ]
+  }'
+```
+
+### Update Multiple Items
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 3
+      },
+      {
+        "id": "456",
+        "quantity": 2
+      },
+      {
+        "id": "321",
+        "quantity": 4
+      }
+    ]
+  }'
+```
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 123,
+    "abandonedEmailSent": false,
+    "items": [
+      {
+        "id": 45,
+        "cartId": 1,
+        "productoId": 789,
+        "quantity": 5,
+        "producto": {
+          "id": 789,
+          "name": "Gaming Mouse",
+          "price": 49.99,
+          "description": "High-performance gaming mouse"
+        }
+      },
+      {
+        "id": 46,
+        "cartId": 1,
+        "productoId": 456,
+        "quantity": 1,
+        "producto": {
+          "id": 456,
+          "name": "Mechanical Keyboard",
+          "price": 129.99,
+          "description": "RGB mechanical keyboard"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": "User ID required"
+}
+```
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Item quantity updated successfully |
+| 400 | Invalid user ID or request body |
+| 401 | Unauthorized access |
+| 500 | Server error - Failed to sync cart |
+
+## Important Notes
+
+<Warning>
+  The sync endpoint replaces ALL cart items. To update an item's quantity, you must include ALL cart items in the request with their current or updated quantities.
+</Warning>
+
+<Info>
+  To effectively increase or decrease quantity:
+  1. First, fetch the current cart using GET `/api/cart/:userId`
+  2. Modify the quantity of the desired item(s)
+  3. Send all items back with the updated quantities
+</Info>
+
+## Quantity Updates
+
+- Quantities must be positive integers (greater than 0)
+- To remove an item, omit it from the items array (see Remove Item documentation)
+- Setting quantity to 0 will not remove the item; you must exclude it from the array
+- The `abandonedEmailSent` flag is reset to `false` when quantities are updated
+- Invalid product IDs are automatically filtered out during sync

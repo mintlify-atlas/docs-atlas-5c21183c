@@ -1,0 +1,192 @@
+---
+title: "List Products"
+api: "GET /api/products"
+description: "Retrieve a paginated list of products with optional filtering and sorting"
+---
+
+## Endpoint
+
+```
+GET /api/products
+```
+
+## Authentication
+
+No authentication required. This is a public endpoint.
+
+## Query Parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number for pagination
+</ParamField>
+
+<ParamField query="limit" type="number" default="10">
+  Number of products per page
+</ParamField>
+
+<ParamField query="categoryId" type="number">
+  Filter products by category ID
+</ParamField>
+
+<ParamField query="brandId" type="number">
+  Filter products by brand ID (accepts both `brandId` and `marcaId`)
+</ParamField>
+
+<ParamField query="search" type="string">
+  Search products by name or description
+</ParamField>
+
+<ParamField query="filter" type="string">
+  Additional filter criteria
+</ParamField>
+
+<ParamField query="order" type="string" default="newest">
+  Sort order for results (e.g., "newest", "price-asc", "price-desc")
+</ParamField>
+
+<ParamField query="minimal" type="boolean" default="false">
+  Return minimal product data (useful for performance optimization)
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of product objects
+  
+  <ResponseField name="id" type="number">
+    Unique product identifier
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Product name
+  </ResponseField>
+  
+  <ResponseField name="descripcion" type="string">
+    Product description
+  </ResponseField>
+  
+  <ResponseField name="precio" type="decimal">
+    Current product price
+  </ResponseField>
+  
+  <ResponseField name="precioOriginal" type="decimal" optional>
+    Original price (if product is on sale)
+  </ResponseField>
+  
+  <ResponseField name="stock" type="number">
+    Available stock quantity
+  </ResponseField>
+  
+  <ResponseField name="foto" type="string" optional>
+    Product image URL
+  </ResponseField>
+  
+  <ResponseField name="isFeatured" type="boolean">
+    Whether the product is featured
+  </ResponseField>
+  
+  <ResponseField name="peso" type="decimal">
+    Product weight in kg
+  </ResponseField>
+  
+  <ResponseField name="alto" type="number">
+    Product height in cm
+  </ResponseField>
+  
+  <ResponseField name="ancho" type="number">
+    Product width in cm
+  </ResponseField>
+  
+  <ResponseField name="profundidad" type="number">
+    Product depth in cm
+  </ResponseField>
+  
+  <ResponseField name="categoriaId" type="number">
+    Associated category ID
+  </ResponseField>
+  
+  <ResponseField name="marcaId" type="number" optional>
+    Associated brand ID
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="datetime">
+    Product creation timestamp
+  </ResponseField>
+  
+  <ResponseField name="updatedAt" type="datetime">
+    Last update timestamp
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="meta" type="object">
+  Pagination metadata
+  
+  <ResponseField name="page" type="number">
+    Current page number
+  </ResponseField>
+  
+  <ResponseField name="limit" type="number">
+    Items per page
+  </ResponseField>
+  
+  <ResponseField name="total" type="number">
+    Total number of products
+  </ResponseField>
+  
+  <ResponseField name="totalPages" type="number">
+    Total number of pages
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET "https://api.pcfix.com/api/products?page=1&limit=20&categoryId=5&order=newest"
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "nombre": "Laptop Gaming XYZ",
+      "descripcion": "High-performance gaming laptop with RTX graphics",
+      "precio": "1299.99",
+      "precioOriginal": "1499.99",
+      "stock": 15,
+      "foto": "https://cdn.pcfix.com/products/laptop-xyz.jpg",
+      "isFeatured": true,
+      "peso": "2.5",
+      "alto": 30,
+      "ancho": 40,
+      "profundidad": 3,
+      "categoriaId": 5,
+      "marcaId": 2,
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-20T14:45:00Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+## Error Response
+
+```json
+{
+  "success": false,
+  "error": "Error message description"
+}
+```

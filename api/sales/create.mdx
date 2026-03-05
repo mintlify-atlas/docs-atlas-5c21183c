@@ -1,0 +1,223 @@
+---
+title: 'Create Sale'
+api: 'POST /api/sales'
+description: 'Create a new sale order with items, delivery method, and payment method'
+---
+
+## Authentication
+
+This endpoint requires authentication. Include the JWT token in the Authorization header.
+
+## Request Body
+
+<ParamField body="items" type="array" required>
+  Array of items to purchase. Each item must contain:
+  <ParamField body="id" type="string | number" required>
+    Product ID
+  </ParamField>
+  <ParamField body="quantity" type="number" required>
+    Quantity to purchase (minimum: 1)
+  </ParamField>
+</ParamField>
+
+<ParamField body="subtotal" type="number" required>
+  Subtotal amount (minimum: 0)
+</ParamField>
+
+<ParamField body="tipoEntrega" type="string" required>
+  Delivery type. Must be one of:
+  - `ENVIO` - Shipping
+  - `RETIRO` - Pickup at store
+</ParamField>
+
+<ParamField body="medioPago" type="string" required>
+  Payment method. Must be one of:
+  - `MERCADOPAGO` - MercadoPago payment gateway
+  - `EFECTIVO` - Cash payment
+  - `VIUMI` - Viumi payment
+  - `TRANSFERENCIA` - Bank transfer
+  - `BINANCE` - Binance cryptocurrency payment
+</ParamField>
+
+<ParamField body="cpDestino" type="string">
+  Destination postal code (minimum 4 characters). Required if `tipoEntrega` is `ENVIO`.
+</ParamField>
+
+<ParamField body="direccionEnvio" type="string">
+  Shipping address. Required if `tipoEntrega` is `ENVIO`.
+</ParamField>
+
+<ParamField body="ciudadEnvio" type="string">
+  Shipping city. Required if `tipoEntrega` is `ENVIO`.
+</ParamField>
+
+<ParamField body="provinciaEnvio" type="string">
+  Shipping province. Required if `tipoEntrega` is `ENVIO`.
+</ParamField>
+
+<ParamField body="telefonoEnvio" type="string">
+  Shipping phone number. Required if `tipoEntrega` is `ENVIO`.
+</ParamField>
+
+<ParamField body="documentoEnvio" type="string">
+  Recipient's ID document (DNI). Required for shipping services.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The created sale object
+  <ResponseField name="id" type="number">
+    Sale ID
+  </ResponseField>
+  <ResponseField name="fecha" type="string">
+    Sale creation date (ISO 8601 timestamp)
+  </ResponseField>
+  <ResponseField name="montoTotal" type="number">
+    Total sale amount including shipping
+  </ResponseField>
+  <ResponseField name="estado" type="string">
+    Sale status. One of: `PENDIENTE_PAGO`, `PENDIENTE_APROBACION`, `APROBADO`, `ENVIADO`, `ENTREGADO`, `RECHAZADO`, `CANCELADO`
+  </ResponseField>
+  <ResponseField name="costoEnvio" type="number">
+    Shipping cost
+  </ResponseField>
+  <ResponseField name="tipoEntrega" type="string">
+    Delivery type: `ENVIO` or `RETIRO`
+  </ResponseField>
+  <ResponseField name="medioPago" type="string">
+    Payment method selected
+  </ResponseField>
+  <ResponseField name="clienteId" type="number">
+    Customer ID
+  </ResponseField>
+  <ResponseField name="lineasVenta" type="array">
+    Array of sale line items
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request failed
+</ResponseField>
+
+<ResponseField name="details" type="array">
+  Validation error details (if validation failed)
+</ResponseField>
+
+## Example Request
+
+```json
+{
+  "items": [
+    {
+      "id": 123,
+      "quantity": 2
+    },
+    {
+      "id": 456,
+      "quantity": 1
+    }
+  ],
+  "subtotal": 45000,
+  "tipoEntrega": "ENVIO",
+  "medioPago": "TRANSFERENCIA",
+  "cpDestino": "1414",
+  "direccionEnvio": "Av. Corrientes 1234",
+  "ciudadEnvio": "Buenos Aires",
+  "provinciaEnvio": "Capital Federal",
+  "telefonoEnvio": "+5491112345678",
+  "documentoEnvio": "12345678"
+}
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "fecha": "2026-03-05T10:30:00.000Z",
+    "montoTotal": 50000,
+    "estado": "PENDIENTE_PAGO",
+    "costoEnvio": 5000,
+    "tipoEntrega": "ENVIO",
+    "medioPago": "TRANSFERENCIA",
+    "clienteId": 42,
+    "direccionEnvio": "Av. Corrientes 1234",
+    "ciudadEnvio": "Buenos Aires",
+    "provinciaEnvio": "Capital Federal",
+    "cpEnvio": "1414",
+    "telefonoEnvio": "+5491112345678",
+    "documentoEnvio": "12345678",
+    "lineasVenta": [
+      {
+        "id": 1,
+        "productoId": 123,
+        "cantidad": 2,
+        "subTotal": 30000
+      },
+      {
+        "id": 2,
+        "productoId": 456,
+        "cantidad": 1,
+        "subTotal": 15000
+      }
+    ]
+  }
+}
+```
+
+## Error Responses
+
+### Validation Error (400)
+```json
+{
+  "success": false,
+  "error": "Datos de venta inválidos",
+  "details": [
+    {
+      "code": "invalid_type",
+      "expected": "number",
+      "received": "string",
+      "path": ["subtotal"],
+      "message": "Expected number, received string"
+    }
+  ]
+}
+```
+
+### Product Not Found or Insufficient Stock (400)
+```json
+{
+  "success": false,
+  "error": "Producto no encontrado"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": "Stock insuficiente"
+}
+```
+
+### Unauthorized (401)
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
+
+## Notes
+
+- The sale is created with status `PENDIENTE_PAGO` by default
+- Stock is reserved when the sale is created
+- Shipping cost is automatically calculated based on the postal code for shipments
+- For `RETIRO` (pickup), no shipping information is required
+- The authenticated user must have an associated customer profile

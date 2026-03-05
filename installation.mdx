@@ -1,0 +1,736 @@
+---
+title: Installation
+description: Comprehensive installation guide for PC Fix including manual setup, dependencies, and database configuration
+---
+
+# Installation Guide
+
+This guide covers detailed installation instructions for PC Fix, including manual setup without Docker, all dependencies, database configuration, and deployment options.
+
+<Note>
+For a quick Docker-based setup, see the [Quick Start Guide](/quickstart). This guide is for developers who need manual installation or want to understand the complete setup process.
+</Note>
+
+## Prerequisites
+
+### Required Software
+
+<CardGroup cols={2}>
+  <Card title="Node.js 20+" icon="node-js">
+    Download from [nodejs.org](https://nodejs.org/)
+    
+    Verify installation:
+    ```bash
+    node --version  # Should be 20.x or higher
+    npm --version   # Should be 10.x or higher
+    ```
+  </Card>
+
+  <Card title="PostgreSQL 15+" icon="database">
+    Download from [postgresql.org](https://www.postgresql.org/download/)
+    
+    Verify installation:
+    ```bash
+    psql --version  # Should be 15.x or higher
+    ```
+  </Card>
+
+  <Card title="Git" icon="git">
+    Download from [git-scm.com](https://git-scm.com/)
+    
+    Verify installation:
+    ```bash
+    git --version
+    ```
+  </Card>
+
+  <Card title="Docker (Optional)" icon="docker">
+    Download from [docker.com](https://www.docker.com/)
+    
+    Only required for containerized deployment
+  </Card>
+</CardGroup>
+
+### System Requirements
+
+- **OS**: Linux, macOS, or Windows with WSL2
+- **RAM**: Minimum 4GB, recommended 8GB+
+- **Disk Space**: 2GB for dependencies and builds
+- **Ports Available**: 3001 (API), 4321 (Web), 5432 (PostgreSQL)
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="Manual Setup (Recommended for Development)">
+    Best for: Active development, debugging, and customization
+
+    ### 1. Clone the Repository
+
+    ```bash
+    git clone https://github.com/martin-ratti/PCFIX-Baru.git
+    cd PCFIX-Baru
+    ```
+
+    ### 2. Install Dependencies
+
+    PC Fix uses NPM Workspaces for monorepo management. Install all dependencies from the root:
+
+    ```bash
+    npm install
+    ```
+
+    This installs dependencies for both `packages/api` and `packages/web`.
+
+    <Note>
+    If you encounter peer dependency warnings, the project uses `--legacy-peer-deps` to resolve conflicts.
+    </Note>
+
+    ### 3. Set Up PostgreSQL Database
+
+    #### Option A: Local PostgreSQL Installation
+
+    Create a new database and user:
+
+    ```bash
+    # Connect to PostgreSQL
+    psql -U postgres
+
+    # Create database and user
+    CREATE DATABASE pcfix_db;
+    CREATE USER pcfix_user WITH ENCRYPTED PASSWORD 'your_password';
+    GRANT ALL PRIVILEGES ON DATABASE pcfix_db TO pcfix_user;
+    
+    # Exit psql
+    \q
+    ```
+
+    #### Option B: Docker PostgreSQL Only
+
+    Run just the database in Docker:
+
+    ```bash
+    docker run -d \
+      --name pcfix-postgres \
+      -e POSTGRES_USER=admin \
+      -e POSTGRES_PASSWORD=password123 \
+      -e POSTGRES_DB=pcfix_db \
+      -p 5432:5432 \
+      postgres:15-alpine
+    ```
+
+    ### 4. Configure API Environment Variables
+
+    Create `packages/api/.env`:
+
+    ```bash
+    # Database Connection
+    DATABASE_URL="postgresql://pcfix_user:your_password@localhost:5432/pcfix_db?schema=public"
+
+    # Server Configuration
+    PORT=3001
+    NODE_ENV=development
+
+    # JWT Authentication
+    JWT_SECRET="generate-a-random-secret-key-here"
+    JWT_REFRESH_SECRET="generate-another-random-secret-key"
+    JWT_EXPIRES_IN="15m"
+    JWT_REFRESH_EXPIRES_IN="7d"
+
+    # CORS Configuration
+    CORS_ORIGIN="http://localhost:4321"
+
+    # Cloudinary (Image CDN)
+    CLOUDINARY_CLOUD_NAME="your-cloudinary-name"
+    CLOUDINARY_API_KEY="your-api-key"
+    CLOUDINARY_API_SECRET="your-api-secret"
+
+    # MercadoPago (Payment Gateway)
+    MERCADOPAGO_ACCESS_TOKEN="your-mercadopago-access-token"
+    MERCADOPAGO_PUBLIC_KEY="your-mercadopago-public-key"
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID="your-google-client-id"
+    GOOGLE_CLIENT_SECRET="your-google-client-secret"
+    GOOGLE_REDIRECT_URI="http://localhost:3001/api/auth/google/callback"
+
+    # Resend (Email Service)
+    RESEND_API_KEY="your-resend-api-key"
+    FROM_EMAIL="noreply@yourdomain.com"
+
+    # Sentry (Error Monitoring)
+    SENTRY_DSN="your-sentry-dsn"
+
+    # Rate Limiting
+    RATE_LIMIT_WINDOW_MS=900000  # 15 minutes
+    RATE_LIMIT_MAX_REQUESTS=100
+    ```
+
+    <Warning>
+    Never commit `.env` files to version control. Add them to `.gitignore`.
+    </Warning>
+
+    ### 5. Configure Web Environment Variables
+
+    Create `packages/web/.env`:
+
+    ```bash
+    # API URLs
+    PUBLIC_API_URL="http://localhost:3001/api"
+    SSR_API_URL="http://localhost:3001/api"
+
+    # Google OAuth Client ID (for frontend)
+    PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
+
+    # Sentry DSN (for frontend error tracking)
+    PUBLIC_SENTRY_DSN="your-sentry-dsn"
+
+    # Site Configuration
+    PUBLIC_SITE_URL="http://localhost:4321"
+    ```
+
+    ### 6. Run Database Migrations
+
+    Generate Prisma Client and run migrations:
+
+    ```bash
+    cd packages/api
+    npx prisma generate
+    npx prisma migrate deploy
+    ```
+
+    This creates all database tables according to the schema in `prisma/schema.prisma`.
+
+    ### 7. Seed the Database (Optional)
+
+    Populate the database with sample data:
+
+    ```bash
+    cd packages/api
+    npm run db:push  # Alternative to migrations for development
+    npx prisma db seed
+    ```
+
+    This creates:
+    - Product categories (Processors, Graphics Cards, Memory, etc.)
+    - Sample brands (Intel, AMD, NVIDIA, etc.)
+    - Demo products with images
+    - Admin user account
+    - Sample orders and customers
+
+    ### 8. Start Development Servers
+
+    Open two terminal windows:
+
+    **Terminal 1 - API Server:**
+    ```bash
+    cd packages/api
+    npm run dev
+    ```
+
+    The API will start at `http://localhost:3001`
+
+    **Terminal 2 - Web Server:**
+    ```bash
+    cd packages/web
+    npm run dev
+    ```
+
+    The frontend will start at `http://localhost:4321`
+
+    ### 9. Verify Installation
+
+    - Visit [http://localhost:4321](http://localhost:4321) - Should show the PC Fix homepage
+    - Visit [http://localhost:3001/api/health](http://localhost:3001/api/health) - Should return `{"status":"ok"}`
+    - Check database with Prisma Studio:
+      ```bash
+      cd packages/api
+      npm run db:studio
+      ```
+      Opens at [http://localhost:5555](http://localhost:5555)
+
+  </Tab>
+
+  <Tab title="Docker Compose (Quickest)">
+    Best for: Quick setup, consistent environments, and demo deployments
+
+    See the [Quick Start Guide](/quickstart) for detailed Docker Compose instructions.
+
+    **Summary:**
+
+    ```bash
+    # Clone repository
+    git clone https://github.com/martin-ratti/PCFIX-Baru.git
+    cd PCFIX-Baru
+
+    # Create environment files (see Quickstart guide)
+    # Create packages/api/.env
+    # Create packages/web/.env
+
+    # Start all services
+    docker-compose up --build
+    ```
+
+    Access:
+    - Frontend: http://localhost:4321
+    - API: http://localhost:3001
+    - Database: localhost:5432
+
+  </Tab>
+</Tabs>
+
+## Database Configuration
+
+### Prisma Schema Overview
+
+PC Fix uses Prisma ORM with PostgreSQL. The schema includes:
+
+<AccordionGroup>
+  <Accordion title="User & Authentication Models">
+    - `User`: User accounts with role-based access
+    - `RefreshToken`: JWT refresh token management
+    - `Cliente`: Extended customer profiles with addresses
+    - `Localidad` & `Provincia`: Location data for Argentina
+  </Accordion>
+
+  <Accordion title="Product Models">
+    - `Producto`: Product catalog with inventory tracking
+    - `Categoria`: Product categories (hierarchical)
+    - `Marca`: Brand management
+    - `ImagenProducto`: Multiple images per product
+    - `Favorite`: User wishlists
+  </Accordion>
+
+  <Accordion title="Shopping & Orders">
+    - `Cart` & `CartItem`: Shopping cart management
+    - `Venta`: Orders and sales
+    - `ItemVenta`: Order line items
+    - `Pago`: Payment tracking with multiple methods
+  </Accordion>
+
+  <Accordion title="Services & Support">
+    - `ConsultaTecnica`: Technical consultation requests
+    - `Servicio`: Service offerings
+    - `ServicioPersonalizado`: Custom service pricing
+  </Accordion>
+
+  <Accordion title="Content & Marketing">
+    - `Banner`: Homepage banners and promotions
+    - `Settings`: Site configuration
+  </Accordion>
+</AccordionGroup>
+
+### Common Prisma Commands
+
+```bash
+# Generate Prisma Client (after schema changes)
+npx prisma generate
+
+# Create a new migration
+npx prisma migrate dev --name your_migration_name
+
+# Apply migrations to production
+npx prisma migrate deploy
+
+# Push schema changes without migrations (dev only)
+npx prisma db push
+
+# Open Prisma Studio (database GUI)
+npx prisma studio
+
+# Reset database (WARNING: deletes all data)
+npx prisma migrate reset
+
+# Seed database
+npx prisma db seed
+```
+
+## External Services Configuration
+
+### Cloudinary (Image CDN)
+
+<Steps>
+  <Step title="Create Account">
+    Sign up at [cloudinary.com](https://cloudinary.com/)
+  </Step>
+  <Step title="Get Credentials">
+    Find your credentials in Dashboard → Account Details:
+    - Cloud Name
+    - API Key
+    - API Secret
+  </Step>
+  <Step title="Add to .env">
+    ```bash
+    CLOUDINARY_CLOUD_NAME="your-cloud-name"
+    CLOUDINARY_API_KEY="your-api-key"
+    CLOUDINARY_API_SECRET="your-api-secret"
+    ```
+  </Step>
+</Steps>
+
+### MercadoPago (Payment Gateway)
+
+<Steps>
+  <Step title="Create Account">
+    Sign up at [mercadopago.com](https://www.mercadopago.com/)
+  </Step>
+  <Step title="Get API Credentials">
+    Navigate to Developers → Credentials:
+    - Access Token (for backend)
+    - Public Key (for frontend)
+  </Step>
+  <Step title="Add to .env">
+    ```bash
+    # Backend (.env)
+    MERCADOPAGO_ACCESS_TOKEN="your-access-token"
+    ```
+  </Step>
+</Steps>
+
+### Google OAuth
+
+<Steps>
+  <Step title="Create Project">
+    Go to [Google Cloud Console](https://console.cloud.google.com/)
+  </Step>
+  <Step title="Enable OAuth">
+    APIs & Services → Credentials → Create OAuth Client ID
+    - Application type: Web application
+    - Authorized redirect URIs: `http://localhost:3001/api/auth/google/callback`
+  </Step>
+  <Step title="Add Credentials">
+    ```bash
+    # Backend
+    GOOGLE_CLIENT_ID="your-client-id"
+    GOOGLE_CLIENT_SECRET="your-client-secret"
+    
+    # Frontend
+    PUBLIC_GOOGLE_CLIENT_ID="your-client-id"
+    ```
+  </Step>
+</Steps>
+
+### Resend (Email Service)
+
+<Steps>
+  <Step title="Create Account">
+    Sign up at [resend.com](https://resend.com/)
+  </Step>
+  <Step title="Generate API Key">
+    Dashboard → API Keys → Create API Key
+  </Step>
+  <Step title="Verify Domain (Production)">
+    Add your domain for production email sending
+  </Step>
+  <Step title="Add to .env">
+    ```bash
+    RESEND_API_KEY="re_your_api_key"
+    FROM_EMAIL="noreply@yourdomain.com"
+    ```
+  </Step>
+</Steps>
+
+### Sentry (Error Monitoring)
+
+<Steps>
+  <Step title="Create Project">
+    Sign up at [sentry.io](https://sentry.io/) and create a project
+  </Step>
+  <Step title="Get DSN">
+    Project Settings → Client Keys (DSN)
+  </Step>
+  <Step title="Add to Both .env Files">
+    ```bash
+    # Backend
+    SENTRY_DSN="your-backend-dsn"
+    
+    # Frontend
+    PUBLIC_SENTRY_DSN="your-frontend-dsn"
+    ```
+  </Step>
+</Steps>
+
+## NPM Scripts Reference
+
+### Root Level Commands
+
+```bash
+# Run web development server
+npm run dev
+
+# Run tests across all packages
+npm run test
+```
+
+### API Package (`packages/api`)
+
+```bash
+# Development
+npm run dev              # Start with nodemon (hot reload)
+npm run build            # Build TypeScript to dist/
+npm start                # Run production build
+
+# Database
+npm run db:push          # Push schema changes (dev)
+npm run db:studio        # Open Prisma Studio
+npx prisma migrate dev   # Create migration
+npx prisma migrate deploy # Apply migrations
+
+# Testing
+npm test                 # Run Vitest unit tests
+npm run test:watch       # Run tests in watch mode
+npm run test:coverage    # Generate coverage report
+```
+
+### Web Package (`packages/web`)
+
+```bash
+# Development
+npm run dev              # Start Astro dev server
+npm run build            # Build for production
+npm run preview          # Preview production build
+
+# Testing
+npm test                 # Run Vitest unit tests
+npm run e2e              # Run Playwright E2E tests
+npm run test:coverage    # Generate coverage report
+
+# Type Checking
+npm run astro check      # Check Astro files
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="PostgreSQL Connection Errors">
+    **Error**: `Error: P1001: Can't reach database server`
+
+    **Solutions**:
+    1. Verify PostgreSQL is running:
+       ```bash
+       # macOS
+       brew services list
+       
+       # Linux
+       sudo systemctl status postgresql
+       
+       # Windows
+       services.msc (look for PostgreSQL)
+       ```
+    
+    2. Check DATABASE_URL format:
+       ```
+       postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public
+       ```
+    
+    3. Test connection directly:
+       ```bash
+       psql -U pcfix_user -d pcfix_db -h localhost
+       ```
+  </Accordion>
+
+  <Accordion title="Prisma Client Generation Issues">
+    **Error**: `Cannot find module '@prisma/client'`
+
+    **Solution**:
+    ```bash
+    cd packages/api
+    npx prisma generate
+    ```
+
+    After schema changes, always regenerate the client.
+  </Accordion>
+
+  <Accordion title="Port Already in Use">
+    **Error**: `Port 3001 (or 4321) is already in use`
+
+    **Solutions**:
+    1. Find and kill the process:
+       ```bash
+       # macOS/Linux
+       lsof -ti:3001 | xargs kill -9
+       
+       # Windows
+       netstat -ano | findstr :3001
+       taskkill /PID <PID> /F
+       ```
+    
+    2. Change port in `.env`:
+       ```bash
+       # API
+       PORT=3002
+       
+       # Web (in astro.config.mjs)
+       server: { port: 4322 }
+       ```
+  </Accordion>
+
+  <Accordion title="Module Not Found Errors">
+    **Error**: Various "Cannot find module" errors
+
+    **Solution**:
+    ```bash
+    # Clear and reinstall dependencies
+    rm -rf node_modules package-lock.json
+    rm -rf packages/*/node_modules
+    npm install
+    ```
+  </Accordion>
+
+  <Accordion title="CORS Errors in Browser">
+    **Error**: `Access to fetch has been blocked by CORS policy`
+
+    **Solution**:
+    Ensure API `.env` has correct CORS_ORIGIN:
+    ```bash
+    CORS_ORIGIN="http://localhost:4321"
+    ```
+
+    For multiple origins:
+    ```bash
+    CORS_ORIGIN="http://localhost:4321,http://localhost:3000"
+    ```
+  </Accordion>
+
+  <Accordion title="JWT Token Issues">
+    **Error**: `JsonWebTokenError: invalid signature`
+
+    **Solutions**:
+    1. Ensure JWT secrets are set in `.env`
+    2. Clear browser cookies and local storage
+    3. Restart the API server after changing JWT secrets
+  </Accordion>
+
+  <Accordion title="TypeScript Build Errors">
+    **Solution**:
+    ```bash
+    cd packages/api  # or packages/web
+    npx tsc --noEmit  # Check for type errors
+    ```
+
+    Common fixes:
+    - Update `@types/*` packages
+    - Check tsconfig.json settings
+    - Regenerate Prisma client
+  </Accordion>
+</AccordionGroup>
+
+## Production Deployment
+
+### Environment Preparation
+
+<Steps>
+  <Step title="Update Environment Variables">
+    - Change all secrets (JWT, database passwords)
+    - Update CORS_ORIGIN to production domain
+    - Configure production database URL
+    - Set NODE_ENV=production
+  </Step>
+
+  <Step title="Build Applications">
+    ```bash
+    # API
+    cd packages/api
+    npm run build
+    
+    # Web
+    cd packages/web
+    npm run build
+    ```
+  </Step>
+
+  <Step title="Run Database Migrations">
+    ```bash
+    cd packages/api
+    npx prisma migrate deploy
+    ```
+  </Step>
+</Steps>
+
+### Deployment Options
+
+<CardGroup cols={2}>
+  <Card title="Vercel (Frontend)" icon="triangle">
+    **Best for**: Astro frontend deployment
+    
+    1. Connect GitHub repository
+    2. Set root directory: `packages/web`
+    3. Add environment variables
+    4. Deploy automatically on push
+  </Card>
+
+  <Card title="Railway (Backend + DB)" icon="train">
+    **Best for**: Express API and PostgreSQL
+    
+    1. Create new project
+    2. Add PostgreSQL database
+    3. Deploy API from GitHub
+    4. Configure environment variables
+  </Card>
+
+  <Card title="Docker Production" icon="docker">
+    **Best for**: Self-hosted deployments
+    
+    ```bash
+    docker-compose -f docker-compose.yml \
+      -f docker-compose.prod.yml up -d
+    ```
+  </Card>
+
+  <Card title="VPS (DigitalOcean, AWS)" icon="server">
+    **Best for**: Full control deployments
+    
+    1. Set up Node.js 20+
+    2. Install PostgreSQL
+    3. Clone repository
+    4. Configure PM2 or systemd
+    5. Set up Nginx reverse proxy
+  </Card>
+</CardGroup>
+
+## Testing
+
+### Run Tests
+
+```bash
+# Unit tests (API)
+cd packages/api
+npm test
+
+# Unit tests (Web)
+cd packages/web
+npm test
+
+# E2E tests (Web)
+cd packages/web
+npm run e2e
+
+# Coverage reports
+npm run test:coverage
+```
+
+### Test Configuration
+
+- **Vitest**: Unit testing for both packages
+- **Playwright**: E2E testing for critical user flows
+- **Supertest**: API endpoint testing
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Explore the Codebase" icon="code">
+    - API structure: `packages/api/src/modules/`
+    - Frontend components: `packages/web/src/components/`
+    - Database schema: `packages/api/prisma/schema.prisma`
+  </Card>
+  <Card title="Configure Admin Account" icon="user-shield">
+    Create admin user via Prisma Studio or seed script to access admin dashboard
+  </Card>
+  <Card title="Customize Branding" icon="palette">
+    - Update logo: `packages/web/public/logo.png`
+    - Modify colors: `packages/web/tailwind.config.mjs`
+    - Edit site metadata: `packages/web/src/layouts/Layout.astro`
+  </Card>
+  <Card title="Set Up External Services" icon="cloud">
+    Configure Cloudinary, MercadoPago, and email services for full functionality
+  </Card>
+</CardGroup>

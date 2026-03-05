@@ -1,0 +1,246 @@
+---
+title: 'Get Sale by ID'
+api: 'GET /api/sales/:id'
+description: 'Retrieve detailed information about a specific sale'
+---
+
+## Authentication
+
+This endpoint requires authentication. Users can only access their own sales unless they have admin privileges.
+
+## Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the sale
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The sale object with complete details
+  <ResponseField name="id" type="number">
+    Sale ID
+  </ResponseField>
+  <ResponseField name="fecha" type="string">
+    Sale creation date (ISO 8601 timestamp)
+  </ResponseField>
+  <ResponseField name="montoTotal" type="number">
+    Total sale amount including shipping
+  </ResponseField>
+  <ResponseField name="estado" type="string">
+    Current sale status:
+    - `PENDIENTE_PAGO` - Pending payment
+    - `PENDIENTE_APROBACION` - Pending approval
+    - `APROBADO` - Approved
+    - `ENVIADO` - Shipped
+    - `ENTREGADO` - Delivered
+    - `RECHAZADO` - Rejected
+    - `CANCELADO` - Cancelled
+  </ResponseField>
+  <ResponseField name="comprobante" type="string">
+    Payment receipt URL (if uploaded)
+  </ResponseField>
+  <ResponseField name="costoEnvio" type="number">
+    Shipping cost
+  </ResponseField>
+  <ResponseField name="metodoEnvio" type="string">
+    Shipping method (e.g., "CORREO_ARGENTINO")
+  </ResponseField>
+  <ResponseField name="codigoSeguimiento" type="string">
+    Tracking code for the shipment
+  </ResponseField>
+  <ResponseField name="etiquetaUrl" type="string">
+    Shipping label URL
+  </ResponseField>
+  <ResponseField name="direccionEnvio" type="string">
+    Shipping address
+  </ResponseField>
+  <ResponseField name="ciudadEnvio" type="string">
+    Shipping city
+  </ResponseField>
+  <ResponseField name="provinciaEnvio" type="string">
+    Shipping province
+  </ResponseField>
+  <ResponseField name="cpEnvio" type="string">
+    Shipping postal code
+  </ResponseField>
+  <ResponseField name="telefonoEnvio" type="string">
+    Shipping phone number
+  </ResponseField>
+  <ResponseField name="documentoEnvio" type="string">
+    Recipient's ID document (DNI)
+  </ResponseField>
+  <ResponseField name="zipnovaShipmentId" type="string">
+    Zipnova shipment tracking ID
+  </ResponseField>
+  <ResponseField name="tipoEntrega" type="string">
+    Delivery type: `ENVIO` (shipping) or `RETIRO` (pickup)
+  </ResponseField>
+  <ResponseField name="medioPago" type="string">
+    Payment method: `MERCADOPAGO`, `EFECTIVO`, `VIUMI`, `TRANSFERENCIA`, `BINANCE`
+  </ResponseField>
+  <ResponseField name="clienteId" type="number">
+    Customer ID
+  </ResponseField>
+  <ResponseField name="cliente" type="object">
+    Customer information including user details
+  </ResponseField>
+  <ResponseField name="lineasVenta" type="array">
+    Array of sale line items
+    <ResponseField name="id" type="number">
+      Line item ID
+    </ResponseField>
+    <ResponseField name="productoId" type="number">
+      Product ID
+    </ResponseField>
+    <ResponseField name="cantidad" type="number">
+      Quantity purchased
+    </ResponseField>
+    <ResponseField name="subTotal" type="number">
+      Line item subtotal
+    </ResponseField>
+    <ResponseField name="customPrice" type="number">
+      Custom price (for manual sales)
+    </ResponseField>
+    <ResponseField name="customDescription" type="string">
+      Custom description (for manual sales)
+    </ResponseField>
+    <ResponseField name="producto" type="object">
+      Complete product information
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="pagos" type="array">
+    Array of payment records associated with this sale
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request failed
+</ResponseField>
+
+## Example Request
+
+```bash
+GET /api/sales/789
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "fecha": "2026-03-05T10:30:00.000Z",
+    "montoTotal": 50000,
+    "estado": "APROBADO",
+    "comprobante": "https://storage.example.com/receipts/789.pdf",
+    "costoEnvio": 5000,
+    "metodoEnvio": "CORREO_ARGENTINO",
+    "codigoSeguimiento": "AR123456789",
+    "etiquetaUrl": "https://zipnova.com/labels/789.pdf",
+    "direccionEnvio": "Av. Corrientes 1234",
+    "ciudadEnvio": "Buenos Aires",
+    "provinciaEnvio": "Capital Federal",
+    "cpEnvio": "1414",
+    "telefonoEnvio": "+5491112345678",
+    "documentoEnvio": "12345678",
+    "zipnovaShipmentId": "ZN789456123",
+    "tipoEntrega": "ENVIO",
+    "medioPago": "TRANSFERENCIA",
+    "clienteId": 42,
+    "cliente": {
+      "id": 42,
+      "userId": 100,
+      "direccion": "Av. Corrientes 1234",
+      "telefono": "+5491112345678",
+      "user": {
+        "id": 100,
+        "email": "customer@example.com",
+        "nombre": "Juan",
+        "apellido": "Pérez",
+        "telefono": "+5491112345678"
+      }
+    },
+    "lineasVenta": [
+      {
+        "id": 1,
+        "ventaId": 789,
+        "productoId": 123,
+        "cantidad": 2,
+        "subTotal": 30000,
+        "customPrice": null,
+        "customDescription": null,
+        "producto": {
+          "id": 123,
+          "nombre": "Procesador AMD Ryzen 5",
+          "descripcion": "Procesador de 6 núcleos y 12 hilos",
+          "precio": 15000,
+          "stock": 8,
+          "foto": "https://example.com/cpu.jpg",
+          "categoriaId": 1,
+          "marcaId": 2
+        }
+      },
+      {
+        "id": 2,
+        "ventaId": 789,
+        "productoId": 456,
+        "cantidad": 1,
+        "subTotal": 15000,
+        "customPrice": null,
+        "customDescription": null,
+        "producto": {
+          "id": 456,
+          "nombre": "Memoria RAM 8GB DDR4",
+          "descripcion": "Memoria de alto rendimiento",
+          "precio": 15000,
+          "stock": 15,
+          "foto": "https://example.com/ram.jpg",
+          "categoriaId": 3,
+          "marcaId": 5
+        }
+      }
+    ],
+    "pagos": []
+  }
+}
+```
+
+## Error Responses
+
+### Not Found (404)
+```json
+{
+  "success": false,
+  "error": "Not Found"
+}
+```
+
+### Unauthorized (401)
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
+
+### Forbidden (403)
+```json
+{
+  "success": false,
+  "error": "Access denied"
+}
+```
+
+## Notes
+
+- Users can only access their own sales unless they have admin role
+- The response includes complete product details for each line item
+- Shipping information is only populated for sales with `tipoEntrega` set to `ENVIO`
+- Payment receipt (`comprobante`) is only available if the user has uploaded one
+- Tracking information is populated once the order has been dispatched

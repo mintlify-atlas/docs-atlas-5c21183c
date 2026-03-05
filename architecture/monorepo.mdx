@@ -1,0 +1,450 @@
+---
+title: 'Monorepo Structure'
+description: 'NPM Workspaces-based monorepo architecture for PC Fix'
+icon: 'folder-tree'
+---
+
+## Overview
+
+PC Fix uses **NPM Workspaces** to manage a monorepo containing the frontend (`web`) and backend (`api`) packages. This approach enables code sharing, unified dependency management, and streamlined development workflows.
+
+<Info>
+All packages are located in the `packages/` directory at the root of the repository.
+</Info>
+
+## Repository Structure
+
+```bash
+pcfix-monorepo/
+├── packages/
+│   ├── api/           # Backend Express API
+│   └── web/           # Frontend Astro app
+├── .github/           # GitHub Actions workflows
+├── .vscode/           # VS Code workspace settings
+├── docker-compose.yml # Docker orchestration
+├── package.json       # Root workspace config
+├── package-lock.json  # Lockfile for all packages
+├── README.md
+└── LICENSE
+```
+
+## Root Configuration
+
+### package.json
+
+```json packages.json
+{
+  "name": "pcfix-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "overrides": {
+    "@vercel/routing-utils": {
+      "path-to-regexp": "^6.3.0"
+    }
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace=web"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.16"
+  }
+}
+```
+
+<Note>
+The `workspaces` field tells NPM to manage dependencies across all packages in `packages/*`.
+</Note>
+
+## Package Structure
+
+### Frontend Package (`packages/web`)
+
+<AccordionGroup>
+  <Accordion title="Directory Structure">
+    ```bash
+    packages/web/
+    ├── src/
+    │   ├── assets/          # Static assets (images, fonts)
+    │   ├── components/      # React components
+    │   │   ├── admin/      # Admin dashboard components
+    │   │   ├── cart/       # Shopping cart components
+    │   │   ├── checkout/   # Checkout flow components
+    │   │   ├── layout/     # Layout components
+    │   │   ├── product/    # Product display components
+    │   │   └── ui/         # Reusable UI components
+    │   ├── data/           # Static data files
+    │   ├── layouts/        # Astro layouts
+    │   ├── pages/          # Astro pages (file-based routing)
+    │   │   ├── admin/     # Admin panel pages
+    │   │   ├── api/       # API routes (Astro endpoints)
+    │   │   ├── auth/      # Authentication pages
+    │   │   ├── checkout/  # Checkout pages
+    │   │   ├── perfil/    # User profile pages
+    │   │   └── tienda/    # Store pages
+    │   ├── stores/         # Zustand state stores
+    │   ├── styles/         # Global CSS
+    │   ├── types/          # TypeScript type definitions
+    │   └── utils/          # Utility functions
+    ├── public/             # Public static files
+    ├── astro.config.mjs    # Astro configuration
+    ├── tailwind.config.mjs # Tailwind configuration
+    ├── tsconfig.json       # TypeScript configuration
+    └── package.json
+    ```
+  </Accordion>
+
+  <Accordion title="Key Dependencies">
+    ```json
+    {
+      "dependencies": {
+        "astro": "^5.16.3",
+        "@astrojs/react": "^4.4.2",
+        "@astrojs/tailwind": "^5.1.0",
+        "@astrojs/node": "^9.5.1",
+        "@astrojs/vercel": "^9.0.3",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "zustand": "^5.0.9",
+        "react-hook-form": "^7.67.0",
+        "zod": "^3.25.76",
+        "tailwindcss": "^3.4.6",
+        "lucide-react": "^0.564.0",
+        "swiper": "^11.1.4",
+        "recharts": "^3.5.1",
+        "sonner": "^2.0.7"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Backend Package (`packages/api`)
+
+<AccordionGroup>
+  <Accordion title="Directory Structure">
+    ```bash
+    packages/api/
+    ├── src/
+    │   ├── modules/              # Feature modules
+    │   │   ├── auth/            # Authentication
+    │   │   ├── banners/         # Banner management
+    │   │   ├── brands/          # Brand management
+    │   │   ├── cart/            # Shopping cart
+    │   │   ├── categories/      # Category management
+    │   │   ├── config/          # System configuration
+    │   │   ├── favorites/       # Product favorites
+    │   │   ├── products/        # Product management
+    │   │   ├── sales/           # Sales & orders
+    │   │   ├── stats/           # Analytics & stats
+    │   │   ├── technical/       # Technical support
+    │   │   └── users/           # User management
+    │   ├── shared/              # Shared code
+    │   │   ├── database/        # Prisma client
+    │   │   ├── middlewares/     # Express middlewares
+    │   │   ├── services/        # Shared services
+    │   │   └── utils/           # Utility functions
+    │   └── server.ts            # Express app entry point
+    ├── prisma/
+    │   ├── schema.prisma        # Database schema
+    │   ├── seed.ts              # Database seeder
+    │   └── migrations/          # Database migrations
+    ├── uploads/                 # Local file uploads (dev)
+    ├── tsconfig.json
+    └── package.json
+    ```
+  </Accordion>
+
+  <Accordion title="Key Dependencies">
+    ```json
+    {
+      "dependencies": {
+        "express": "^5.2.1",
+        "@prisma/client": "^6.18.0",
+        "prisma": "^6.18.0",
+        "bcryptjs": "^2.4.6",
+        "jsonwebtoken": "^9.0.2",
+        "helmet": "^8.1.0",
+        "cors": "^2.8.5",
+        "express-rate-limit": "^8.2.1",
+        "morgan": "^1.10.1",
+        "multer": "^2.0.2",
+        "cloudinary": "^2.8.0",
+        "axios": "^1.13.5",
+        "node-cron": "^4.2.1",
+        "google-auth-library": "^10.5.0",
+        "mercadopago": "^2.11.0",
+        "resend": "^6.6.0",
+        "zod": "^3.25.76"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Workspace Commands
+
+### Running Commands in Specific Packages
+
+<CodeGroup>
+```bash Dev Server (Frontend)
+npm run dev --workspace=web
+# or
+npm run dev -w web
+```
+
+```bash Dev Server (Backend)
+npm run dev --workspace=api
+# or
+npm run dev -w api
+```
+
+```bash Install Dependencies in Package
+npm install <package-name> --workspace=web
+```
+
+```bash Run Tests (All Packages)
+npm run test --workspaces
+```
+</CodeGroup>
+
+### Global Commands
+
+<CodeGroup>
+```bash Install All Dependencies
+npm install
+```
+
+```bash Clean Install
+rm -rf node_modules package-lock.json
+rm -rf packages/*/node_modules
+npm install
+```
+
+```bash Run Script in All Workspaces
+npm run <script-name> --workspaces
+```
+</CodeGroup>
+
+## Docker Setup
+
+### docker-compose.yml
+
+The monorepo includes a Docker Compose configuration for local development:
+
+```yaml docker-compose.yml
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pcfix
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./packages/api
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pcfix
+      NODE_ENV: development
+    depends_on:
+      - db
+    volumes:
+      - ./packages/api:/app
+      - /app/node_modules
+
+  web:
+    build:
+      context: ./packages/web
+      dockerfile: Dockerfile
+    ports:
+      - "4321:4321"
+    environment:
+      PUBLIC_API_URL: http://localhost:3002
+    depends_on:
+      - api
+    volumes:
+      - ./packages/web:/app
+      - /app/node_modules
+
+  prisma-studio:
+    image: timothyjmiller/prisma-studio:latest
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/pcfix
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
+```
+
+<Tip>
+Run `docker-compose up --build` to start all services locally.
+</Tip>
+
+## Benefits of Monorepo Architecture
+
+<CardGroup cols={2}>
+  <Card title="Shared Code" icon="arrows-split-up-and-left">
+    Share TypeScript types, validation schemas (Zod), and utility functions between packages
+  </Card>
+  
+  <Card title="Unified Dependencies" icon="box-taped">
+    Single `package-lock.json` ensures consistent versions across the entire codebase
+  </Card>
+  
+  <Card title="Atomic Changes" icon="code-commit">
+    Make breaking changes to API and frontend in a single commit
+  </Card>
+  
+  <Card title="Simplified Testing" icon="vial">
+    Run tests across all packages with a single command
+  </Card>
+</CardGroup>
+
+## Shared Type Definitions
+
+Example of sharing types between frontend and backend:
+
+<CodeGroup>
+```typescript Backend (API) - Type Definition
+// packages/api/src/modules/products/product.types.ts
+export interface Product {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  stock: number;
+  foto: string | null;
+  categoriaId: number;
+  marcaId: number | null;
+}
+```
+
+```typescript Frontend (Web) - Using Types
+// packages/web/src/types/product.ts
+// Can import directly if using path aliases or workspace linking
+export interface Product {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  stock: number;
+  foto: string | null;
+  categoriaId: number;
+  marcaId: number | null;
+}
+```
+</CodeGroup>
+
+<Note>
+In practice, types are often duplicated or shared via a common package in larger monorepos. This project maintains types separately for deployment flexibility.
+</Note>
+
+## Development Workflow
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone <repository-url>
+    cd pcfix-monorepo
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    npm install
+    ```
+    This installs dependencies for all workspaces.
+  </Step>
+  
+  <Step title="Set Up Environment">
+    Create `.env` files in both `packages/api` and `packages/web`
+  </Step>
+  
+  <Step title="Start Development">
+    ```bash
+    # Option 1: Docker (Recommended)
+    docker-compose up --build
+    
+    # Option 2: Manual
+    npm run dev --workspace=api
+    npm run dev --workspace=web
+    ```
+  </Step>
+</Steps>
+
+## CI/CD Integration
+
+<Tabs>
+  <Tab title="Vercel (Frontend)">
+    Vercel automatically detects the monorepo structure:
+    
+    ```json vercel.json
+    {
+      "buildCommand": "cd packages/web && npm run build",
+      "outputDirectory": "packages/web/dist",
+      "installCommand": "npm install",
+      "framework": "astro"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Railway (Backend)">
+    Railway configuration for the API package:
+    
+    ```json
+    {
+      "build": {
+        "builder": "NIXPACKS",
+        "buildCommand": "cd packages/api && npm run build",
+        "startCommand": "cd packages/api && npm start"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Keep Packages Independent" icon="cubes">
+    Each package should be runnable independently with its own `package.json` scripts
+  </Card>
+  
+  <Card title="Use Workspace Protocol" icon="link">
+    Reference workspace packages using `workspace:*` protocol for internal dependencies
+  </Card>
+  
+  <Card title="Centralize Tooling" icon="wrench">
+    Share configuration files (ESLint, Prettier, TypeScript) at the root level
+  </Card>
+  
+  <Card title="Version Control" icon="code-branch">
+    Use a single version number for the entire monorepo, or version packages independently
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Frontend Architecture" icon="browser" href="/architecture/frontend">
+    Learn about the Astro + React setup
+  </Card>
+  <Card title="Backend Architecture" icon="server" href="/architecture/backend">
+    Explore the Express API structure
+  </Card>
+  <Card title="Database Schema" icon="database" href="/architecture/database">
+    Understand the data model
+  </Card>
+</CardGroup>

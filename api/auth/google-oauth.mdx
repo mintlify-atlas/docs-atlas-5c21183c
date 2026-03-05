@@ -1,0 +1,212 @@
+---
+title: 'Google OAuth Login'
+api: 'POST /api/auth/google'
+description: 'Authenticate a user with Google OAuth'
+---
+
+## Endpoint
+
+```
+POST /api/auth/google
+```
+
+Authenticates a user using Google OAuth. Creates a new user account if the Google account is not already registered, or logs in an existing user.
+
+## Request Body
+
+<ParamField body="token" type="string" required>
+  Google ID token obtained from Google Sign-In on the client side.
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the request was successful.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Contains the user data and JWT token.
+  
+  <Expandable title="data properties">
+    <ResponseField name="user" type="object">
+      User object containing profile information.
+      
+      <Expandable title="user properties">
+        <ResponseField name="id" type="number">
+          Unique user identifier.
+        </ResponseField>
+        
+        <ResponseField name="email" type="string">
+          User's email address from Google account.
+        </ResponseField>
+        
+        <ResponseField name="nombre" type="string">
+          User's first name from Google profile.
+        </ResponseField>
+        
+        <ResponseField name="apellido" type="string">
+          User's last name from Google profile.
+        </ResponseField>
+        
+        <ResponseField name="googleId" type="string">
+          Google account identifier.
+        </ResponseField>
+        
+        <ResponseField name="role" type="string">
+          User's role (default: "USER").
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="token" type="string">
+      JWT authentication token valid for 7 days.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Status Codes
+
+<ResponseField name="200" type="Success">
+  Authentication successful. Returns user data and JWT token.
+</ResponseField>
+
+<ResponseField name="400" type="Bad Request">
+  Missing Google token in request body.
+</ResponseField>
+
+<ResponseField name="401" type="Unauthorized">
+  Invalid or expired Google token.
+</ResponseField>
+
+## Error Response
+
+```json
+{
+  "success": false,
+  "error": "Error autenticando con Google"
+}
+```
+
+or
+
+```json
+{
+  "success": false,
+  "error": "Falta el token de Google"
+}
+```
+
+## Example Request
+
+```bash cURL
+curl -X POST https://api.pcfix.com/api/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE4MmU0M..."
+  }'
+```
+
+```javascript JavaScript
+// After obtaining the Google ID token from Google Sign-In
+const response = await fetch('https://api.pcfix.com/api/auth/google', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    token: googleIdToken
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+# After obtaining the Google ID token from Google Sign-In
+response = requests.post(
+  'https://api.pcfix.com/api/auth/google',
+  json={
+    'token': google_id_token
+  }
+)
+
+data = response.json()
+print(data)
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 789,
+      "email": "usuario@gmail.com",
+      "nombre": "Carlos",
+      "apellido": "Rodríguez",
+      "googleId": "117234567890123456789",
+      "role": "USER"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+## Implementation Notes
+
+### New User Registration
+When a user authenticates with Google for the first time:
+- A new user account is automatically created
+- User information is populated from the Google profile
+- A customer profile is created and linked to the user
+- A welcome email is sent to the user's email address
+- The `password` field is set to an empty string (password login is disabled)
+
+### Existing User Login
+When a user with an existing account authenticates:
+- If the user doesn't have a `googleId` yet, it will be added to their profile
+- The user is logged in and receives a new JWT token
+
+### Client-Side Integration
+
+To use this endpoint, you need to:
+
+1. Set up Google Sign-In on your client application
+2. Obtain the Google ID token after successful sign-in
+3. Send the token to this endpoint
+
+Example using Google Sign-In JavaScript library:
+
+```javascript
+// Initialize Google Sign-In
+google.accounts.id.initialize({
+  client_id: 'YOUR_GOOGLE_CLIENT_ID',
+  callback: handleCredentialResponse
+});
+
+// Handle the credential response
+async function handleCredentialResponse(response) {
+  const googleToken = response.credential;
+  
+  // Send to your API
+  const result = await fetch('https://api.pcfix.com/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: googleToken })
+  });
+  
+  const data = await result.json();
+  // Store the JWT token for authenticated requests
+  localStorage.setItem('authToken', data.data.token);
+}
+```
+
+## Security Notes
+
+- The Google ID token is verified server-side using the Google Auth Library
+- The token must be issued by Google and intended for your application's client ID
+- Users authenticated via Google will have an empty `password` field and cannot use email/password login unless they set a password separately

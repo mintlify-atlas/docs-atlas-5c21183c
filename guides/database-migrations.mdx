@@ -1,0 +1,461 @@
+---
+title: "Database Migrations"
+description: "Manage database schema changes with Prisma Migrate"
+---
+
+PC Fix uses **Prisma** as its ORM and **Prisma Migrate** for managing database schema changes. This guide covers creating, applying, and managing migrations throughout the development lifecycle.
+
+## Overview
+
+Prisma Migrate enables version-controlled, type-safe database schema management. All schema changes are defined in `packages/api/prisma/schema.prisma` and tracked as migration files.
+
+<Note>
+Migrations are stored in `packages/api/prisma/migrations/` and should be committed to version control.
+</Note>
+
+## Prisma Schema
+
+The schema defines your database structure using Prisma's DSL:
+
+```prisma schema.prisma lines
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  nombre    String
+  apellido  String
+  password  String?
+  googleId  String?  @unique
+  role      Role     @default(USER)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  
+  // Relations
+  cliente   Cliente?
+  favoritos Favorite[]
+  cart      Cart?
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+```
+
+<Tip>
+The full schema is located at `packages/api/prisma/schema.prisma` and contains 20+ models including User, Producto, Venta, Cart, and more.
+</Tip>
+
+## Common Migration Workflows
+
+### Creating a New Migration
+
+When you modify `schema.prisma`, create a migration:
+
+<Steps>
+  <Step title="Edit Schema">
+    Modify `packages/api/prisma/schema.prisma`:
+    ```prisma
+    model Producto {
+      id          Int      @id @default(autoincrement())
+      nombre      String
+      descripcion String?
+      precio      Float
+      // Add new field
+      descuento   Float?   @default(0)
+    }
+    ```
+  </Step>
+  <Step title="Create Migration">
+    Generate migration files:
+    ```bash
+    cd packages/api
+    npx prisma migrate dev --name add-product-discount
+    ```
+    
+    This will:
+    - Generate SQL migration file
+    - Apply migration to database
+    - Regenerate Prisma Client with new types
+  </Step>
+  <Step title="Review Migration">
+    Check the generated SQL in `prisma/migrations/TIMESTAMP_add-product-discount/migration.sql`:
+    ```sql
+    ALTER TABLE "Producto" ADD COLUMN "descuento" DOUBLE PRECISION DEFAULT 0;
+    ```
+  </Step>
+  <Step title="Commit Changes">
+    ```bash
+    git add prisma/schema.prisma prisma/migrations/
+    git commit -m "Add discount field to products"
+    ```
+  </Step>
+</Steps>
+
+### Applying Existing Migrations
+
+When pulling changes from git or deploying:
+
+<Tabs>
+  <Tab title="Development">
+    ```bash
+    cd packages/api
+    npx prisma migrate dev
+    ```
+    Applies pending migrations and regenerates Prisma Client.
+  </Tab>
+  <Tab title="Production">
+    ```bash
+    cd packages/api
+    npx prisma migrate deploy
+    ```
+    Only applies migrations without prompts. Safe for CI/CD and production.
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker exec -it pcfix-api npx prisma migrate deploy
+    ```
+    Apply migrations inside running container.
+  </Tab>
+</Tabs>
+
+### Resetting the Database
+
+<Warning>
+This will delete all data! Only use in development.
+</Warning>
+
+```bash
+cd packages/api
+npx prisma migrate reset
+```
+
+This will:
+1. Drop the database
+2. Create a new database
+3. Apply all migrations
+4. Run seed script (if configured)
+
+## Prisma Client Generation
+
+After schema changes, regenerate the Prisma Client:
+
+```bash
+cd packages/api
+npx prisma generate
+```
+
+<Note>
+This updates TypeScript types to match your schema. Run after pulling schema changes from git.
+</Note>
+
+## Database Seeding
+
+PC Fix includes a seed script for populating test data:
+
+```typescript prisma/seed.ts
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+async function main() {
+  // Create admin user
+  await prisma.user.create({
+    data: {
+      email: 'admin@pcfix.com',
+      nombre: 'Admin',
+      apellido: 'User',
+      password: await bcrypt.hash('admin123', 10),
+      role: 'ADMIN',
+    },
+  });
+  
+  // Create sample products
+  await prisma.producto.createMany({
+    data: [
+      {
+        nombre: 'RTX 4090',
+        descripcion: 'NVIDIA GeForce RTX 4090',
+        precio: 2499.99,
+        stock: 10,
+      },
+      // ... more products
+    ],
+  });
+}
+
+main()
+  .catch((e) => console.error(e))
+  .finally(() => prisma.$disconnect());
+```
+
+Run the seed:
+
+```bash
+cd packages/api
+npx prisma db seed
+```
+
+<Tip>
+Seeding is configured in `packages/api/package.json`:
+```json
+"prisma": {
+  "seed": "ts-node prisma/seed.ts"
+}
+```
+</Tip>
+
+## Prisma Studio
+
+Explore and edit database records with Prisma Studio:
+
+```bash
+cd packages/api
+npx prisma studio
+```
+
+Access at http://localhost:5555
+
+<Note>
+For Docker: `docker exec -it pcfix-api npx prisma studio`
+</Note>
+
+## Common Prisma Commands
+
+<CodeGroup>
+
+```bash Development
+# Create migration from schema changes
+npx prisma migrate dev --name migration-name
+
+# Apply migrations and regenerate client
+npx prisma migrate dev
+
+# Reset database (deletes all data)
+npx prisma migrate reset
+
+# Generate Prisma Client
+npx prisma generate
+
+# Open Prisma Studio
+npx prisma studio
+```
+
+```bash Production
+# Apply pending migrations
+npx prisma migrate deploy
+
+# Check migration status
+npx prisma migrate status
+
+# Generate Prisma Client
+npx prisma generate
+```
+
+```bash Database Inspection
+# Pull schema from database
+npx prisma db pull
+
+# Push schema to database (without migrations)
+npx prisma db push
+
+# Seed database
+npx prisma db seed
+```
+
+</CodeGroup>
+
+## Migration Best Practices
+
+<Steps>
+  <Step title="Test Locally First">
+    Always test migrations on local database before deploying:
+    ```bash
+    npx prisma migrate dev
+    npm run test
+    ```
+  </Step>
+  <Step title="Use Descriptive Names">
+    Name migrations clearly:
+    ```bash
+    # Good
+    npx prisma migrate dev --name add-user-phone-number
+    npx prisma migrate dev --name create-order-status-enum
+    
+    # Bad
+    npx prisma migrate dev --name update
+    npx prisma migrate dev --name fix
+    ```
+  </Step>
+  <Step title="Review Generated SQL">
+    Check migration files before committing:
+    ```bash
+    cat prisma/migrations/TIMESTAMP_migration-name/migration.sql
+    ```
+  </Step>
+  <Step title="Backup Production Data">
+    Before running migrations in production:
+    ```bash
+    pg_dump pcfix_production > backup.sql
+    ```
+  </Step>
+</Steps>
+
+## Handling Complex Migrations
+
+### Data Migrations
+
+For migrations that require data transformation, edit the generated SQL:
+
+```sql migration.sql
+-- Step 1: Add new column (nullable)
+ALTER TABLE "User" ADD COLUMN "fullName" TEXT;
+
+-- Step 2: Populate new column from existing data
+UPDATE "User" SET "fullName" = CONCAT("nombre", ' ', "apellido");
+
+-- Step 3: Make column required
+ALTER TABLE "User" ALTER COLUMN "fullName" SET NOT NULL;
+
+-- Step 4: Drop old columns (optional)
+ALTER TABLE "User" DROP COLUMN "nombre";
+ALTER TABLE "User" DROP COLUMN "apellido";
+```
+
+### Breaking Changes
+
+For breaking schema changes:
+
+1. **Deploy in stages**:
+   - Add new fields (optional)
+   - Update application code to use new fields
+   - Make fields required
+   - Remove old fields
+
+2. **Use database transactions**:
+   ```sql
+   BEGIN;
+   -- Your migration SQL
+   COMMIT;
+   ```
+
+3. **Plan rollback strategy**:
+   ```sql
+   -- rollback.sql
+   ALTER TABLE "Producto" DROP COLUMN "descuento";
+   ```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Migration failed to apply">
+    If a migration fails:
+    ```bash
+    # Check migration status
+    npx prisma migrate status
+    
+    # Mark migration as applied (if manually fixed)
+    npx prisma migrate resolve --applied 20240305_migration_name
+    
+    # Or mark as rolled back
+    npx prisma migrate resolve --rolled-back 20240305_migration_name
+    ```
+  </Accordion>
+  
+  <Accordion title="Schema and database out of sync">
+    ```bash
+    # Pull current database schema
+    npx prisma db pull
+    
+    # Or push schema to database (development only)
+    npx prisma db push
+    ```
+  </Accordion>
+  
+  <Accordion title="Prisma Client outdated">
+    ```bash
+    # Regenerate client
+    npx prisma generate
+    
+    # Clear node_modules and reinstall
+    rm -rf node_modules
+    npm install
+    ```
+  </Accordion>
+  
+  <Accordion title="Migration conflicts after git merge">
+    ```bash
+    # Reset to a clean state
+    npx prisma migrate reset
+    
+    # Reapply all migrations
+    npx prisma migrate dev
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## CI/CD Integration
+
+Add migration checks to your CI pipeline:
+
+```yaml .github/workflows/ci.yml lines
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+        working-directory: packages/api
+      - name: Run migrations
+        run: npx prisma migrate deploy
+        working-directory: packages/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      - name: Run tests
+        run: npm test
+        working-directory: packages/api
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/architecture/database">
+    Explore the complete database schema
+  </Card>
+  <Card title="Backend Architecture" icon="server" href="/architecture/backend">
+    Learn about the API structure
+  </Card>
+  <Card title="Environment Setup" icon="gear" href="/guides/environment-setup">
+    Configure database connection
+  </Card>
+  <Card title="Testing" icon="flask" href="/guides/testing">
+    Test database operations
+  </Card>
+</CardGroup>

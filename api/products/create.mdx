@@ -1,0 +1,236 @@
+---
+title: "Create Product"
+api: "POST /api/products"
+description: "Create a new product in the catalog"
+---
+
+## Endpoint
+
+```
+POST /api/products
+```
+
+## Authentication
+
+**Admin access required.** Only users with the `ADMIN` role can create products.
+
+## Request Headers
+
+```
+Content-Type: multipart/form-data
+Authorization: Bearer <access_token>
+```
+
+## Request Body
+
+This endpoint accepts `multipart/form-data` to support image upload.
+
+<ParamField body="nombre" type="string" required>
+  Product name (minimum 3 characters)
+</ParamField>
+
+<ParamField body="descripcion" type="string" required>
+  Product description (minimum 10 characters)
+</ParamField>
+
+<ParamField body="precio" type="number" required>
+  Product price (must be positive)
+</ParamField>
+
+<ParamField body="precioOriginal" type="number">
+  Original price (for displaying discounts)
+</ParamField>
+
+<ParamField body="stock" type="number" required>
+  Initial stock quantity (must be non-negative integer)
+</ParamField>
+
+<ParamField body="categoriaId" type="number" required>
+  Category ID to associate with this product
+</ParamField>
+
+<ParamField body="marcaId" type="number">
+  Brand ID to associate with this product
+</ParamField>
+
+<ParamField body="peso" type="number" default="0.5">
+  Product weight in kg
+</ParamField>
+
+<ParamField body="alto" type="number" default="10">
+  Product height in cm
+</ParamField>
+
+<ParamField body="ancho" type="number" default="10">
+  Product width in cm
+</ParamField>
+
+<ParamField body="profundidad" type="number" default="10">
+  Product depth in cm
+</ParamField>
+
+<ParamField body="isFeatured" type="boolean" default="false">
+  Whether this product should be featured
+</ParamField>
+
+<ParamField body="foto" type="file">
+  Product image file (uploaded as multipart form data)
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the product was created successfully
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The newly created product object
+  
+  <ResponseField name="id" type="number">
+    Unique product identifier
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    Product name
+  </ResponseField>
+  
+  <ResponseField name="descripcion" type="string">
+    Product description
+  </ResponseField>
+  
+  <ResponseField name="precio" type="decimal">
+    Product price
+  </ResponseField>
+  
+  <ResponseField name="precioOriginal" type="decimal" optional>
+    Original price
+  </ResponseField>
+  
+  <ResponseField name="stock" type="number">
+    Stock quantity
+  </ResponseField>
+  
+  <ResponseField name="foto" type="string" optional>
+    Uploaded product image URL
+  </ResponseField>
+  
+  <ResponseField name="isFeatured" type="boolean">
+    Featured status
+  </ResponseField>
+  
+  <ResponseField name="peso" type="decimal">
+    Weight in kg
+  </ResponseField>
+  
+  <ResponseField name="alto" type="number">
+    Height in cm
+  </ResponseField>
+  
+  <ResponseField name="ancho" type="number">
+    Width in cm
+  </ResponseField>
+  
+  <ResponseField name="profundidad" type="number">
+    Depth in cm
+  </ResponseField>
+  
+  <ResponseField name="categoriaId" type="number">
+    Category ID
+  </ResponseField>
+  
+  <ResponseField name="marcaId" type="number" optional>
+    Brand ID
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="datetime">
+    Creation timestamp
+  </ResponseField>
+  
+  <ResponseField name="updatedAt" type="datetime">
+    Last update timestamp
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST "https://api.pcfix.com/api/products" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -F "nombre=Gaming Mouse Pro" \
+  -F "descripcion=High-precision gaming mouse with RGB lighting and customizable buttons" \
+  -F "precio=79.99" \
+  -F "stock=50" \
+  -F "categoriaId=8" \
+  -F "marcaId=3" \
+  -F "peso=0.15" \
+  -F "alto=5" \
+  -F "ancho=8" \
+  -F "profundidad=12" \
+  -F "isFeatured=true" \
+  -F "foto=@/path/to/mouse-image.jpg"
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "nombre": "Gaming Mouse Pro",
+    "descripcion": "High-precision gaming mouse with RGB lighting and customizable buttons",
+    "precio": "79.99",
+    "precioOriginal": null,
+    "stock": 50,
+    "foto": "https://cdn.pcfix.com/uploads/mouse-image-1234567890.jpg",
+    "isFeatured": true,
+    "peso": "0.15",
+    "alto": 5,
+    "ancho": 8,
+    "profundidad": 12,
+    "categoriaId": 8,
+    "marcaId": 3,
+    "createdAt": "2024-03-05T10:30:00Z",
+    "updatedAt": "2024-03-05T10:30:00Z"
+  }
+}
+```
+
+## Error Responses
+
+### Validation Error
+
+```json
+{
+  "success": false,
+  "error": "Datos inválidos",
+  "details": [
+    {
+      "field": "nombre",
+      "message": "El nombre debe tener al menos 3 caracteres"
+    },
+    {
+      "field": "precio",
+      "message": "El precio debe ser positivo"
+    }
+  ]
+}
+```
+
+### Unauthorized
+
+```json
+{
+  "success": false,
+  "error": "Unauthorized - Admin access required"
+}
+```
+
+### Server Error
+
+```json
+{
+  "success": false,
+  "error": "Error message description"
+}
+```

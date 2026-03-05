@@ -1,0 +1,378 @@
+---
+title: 'Resend Email Service'
+description: 'Configure and use Resend for transactional emails in PC Fix'
+icon: 'envelope'
+---
+
+Resend is the email service provider used in PC Fix for sending transactional emails including order confirmations, status updates, password resets, and customer notifications.
+
+## Overview
+
+PC Fix uses Resend to send:
+- **Order Updates**: Status changes, shipping notifications
+- **Customer Support**: Contact confirmations, inquiry replies
+- **Authentication**: Welcome emails, password resets
+- **Marketing**: Abandoned cart reminders, stock alerts, price drops
+
+## Configuration
+
+<Steps>
+  <Step title="Create a Resend Account">
+    Sign up for an account at [resend.com](https://resend.com). The free tier includes 100 emails per day.
+  </Step>
+
+  <Step title="Generate an API Key">
+    Go to **API Keys** in your Resend dashboard and create a new API key with send permissions.
+  </Step>
+
+  <Step title="Verify Your Domain (Optional)">
+    For production use, verify your sending domain in Resend to improve deliverability and remove "via resend.com" from emails.
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Add these variables to your `.env` file in the `packages/api` directory:
+
+    ```bash
+    RESEND_API_KEY=re_your_api_key
+    EMAIL_FROM="PCFIX <noreply@pcfixbaru.com.ar>"
+    REPLY_TO=pcfixbaru@gmail.com
+    ADMIN_EMAIL=admin@pcfixbaru.com.ar
+    FRONTEND_URL=http://localhost:4321
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Keep your `RESEND_API_KEY` secret. Never expose it in client-side code or commit it to version control.
+</Warning>
+
+## Email Service Implementation
+
+The `EmailService` class is located at `packages/api/src/shared/services/EmailService.ts`:
+
+<CodeGroup>
+```typescript EmailService.ts
+import { Resend } from 'resend';
+
+export class EmailService {
+  private resend: Resend;
+  private frontendUrl: string;
+
+  constructor() {
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4321';
+  }
+
+  async sendEmail(to: string, subject: string, htmlContent: string) {
+    try {
+      const fromEmail = process.env.EMAIL_FROM || 'PCFIX <noreply@pcfixbaru.com.ar>';
+      const replyToAddress = process.env.REPLY_TO || 'pcfixbaru@gmail.com';
+
+      const { data, error } = await this.resend.emails.send({
+        from: fromEmail,
+        replyTo: replyToAddress,
+        to,
+        subject,
+        html: htmlContent,
+      });
+
+      if (error) {
+        console.error('Error sending email (Resend):', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Unexpected error sending email:', error);
+      return false;
+    }
+  }
+}
+```
+</CodeGroup>
+
+## Available Email Templates
+
+The `EmailService` provides pre-built templates for common scenarios:
+
+### Order & Payment Emails
+
+<CodeGroup>
+```typescript Status Update
+await emailService.sendStatusUpdate(
+  userEmail,
+  saleId,
+  'APROBADO',
+  'ENVIO',
+  'TR123456789'
+);
+```
+
+```typescript Receipt Notification
+await emailService.sendNewReceiptNotification(
+  saleId,
+  userEmail
+);
+```
+
+```typescript Shipment Created
+await emailService.sendNewShipmentNotification(
+  saleId,
+  customerEmail,
+  shipmentId,
+  trackingCode
+);
+```
+</CodeGroup>
+
+### Authentication Emails
+
+<CodeGroup>
+```typescript Welcome Email
+await emailService.sendWelcomeEmail(
+  email,
+  name
+);
+```
+
+```typescript Password Reset
+await emailService.sendPasswordResetEmail(
+  email,
+  resetToken
+);
+```
+</CodeGroup>
+
+### Customer Support
+
+<CodeGroup>
+```typescript Contact Confirmation
+await emailService.sendContactConfirmationEmail(
+  userEmail,
+  userName
+);
+```
+
+```typescript New Inquiry Notification
+await emailService.sendNewInquiryNotification(
+  userEmail,
+  userName,
+  subject,
+  message
+);
+```
+
+```typescript Reply Notification
+await emailService.sendReplyNotification(
+  userEmail,
+  originalSubject,
+  technicianResponse
+);
+```
+</CodeGroup>
+
+### Marketing Emails
+
+<CodeGroup>
+```typescript Abandoned Cart
+await emailService.sendAbandonedCartEmail(
+  userEmail,
+  userName,
+  products
+);
+```
+
+```typescript Stock Alert
+await emailService.sendStockAlertEmail(
+  userEmail,
+  productName,
+  productLink,
+  foto,
+  price
+);
+```
+
+```typescript Price Drop
+await emailService.sendPriceDropNotification(
+  userEmail,
+  productName,
+  productLink,
+  foto,
+  oldPrice,
+  newPrice
+);
+```
+</CodeGroup>
+
+## Email Template Structure
+
+All email templates follow a consistent HTML structure:
+
+```html
+<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            color: #1f2937; max-width: 600px; margin: 0 auto; 
+            background-color: #ffffff; border: 1px solid #e5e7eb; 
+            border-radius: 12px; overflow: hidden;">
+  
+  <!-- Header -->
+  <div style="background-color: #111827; padding: 25px; text-align: center;">
+    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">
+      PC FIX
+    </h1>
+  </div>
+
+  <!-- Content -->
+  <div style="padding: 30px;">
+    <!-- Email content here -->
+  </div>
+  
+  <!-- Footer -->
+  <div style="background-color: #f9fafb; padding: 20px; text-align: center; 
+              border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af;">
+    <p style="margin: 0;">PC FIX - Experiencia en Hardware</p>
+  </div>
+</div>
+```
+
+<Note>
+  Email templates use inline CSS for maximum compatibility across email clients.
+</Note>
+
+## Usage Example
+
+Here's how to use the email service in your controllers:
+
+```typescript sales.controller.ts
+import { EmailService } from '@/shared/services/EmailService';
+
+const emailService = new EmailService();
+
+export const updateSaleStatus = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { estado, tipoEntrega, codigoSeguimiento } = req.body;
+
+  // Update sale in database
+  const sale = await prisma.venta.update({
+    where: { id: Number(id) },
+    data: { estado, codigoSeguimiento },
+  });
+
+  // Send status update email
+  if (sale.cliente?.email) {
+    await emailService.sendStatusUpdate(
+      sale.cliente.email,
+      sale.id,
+      estado,
+      tipoEntrega,
+      codigoSeguimiento
+    );
+  }
+
+  res.json({ success: true, sale });
+};
+```
+
+## Order Status Messages
+
+The `sendStatusUpdate` method automatically generates appropriate messages for each status:
+
+| Status | Icon | Message |
+|--------|------|--------|
+| `APROBADO` | ✅ | Your payment has been approved! We're preparing your order. |
+| `PENDIENTE_APROBACION` | ⏳ | We received your receipt. Our team is verifying the payment. |
+| `RECHAZADO` | ❌ | We couldn't verify your payment. Please check the receipt. |
+| `CANCELADO` | 🚫 | Your order has been cancelled. |
+| `ENVIADO` (Pickup) | 🏪 | Your order is ready for pickup at our store! |
+| `ENVIADO` (Delivery) | 🚚 | Your order is on its way! Track it with code: {tracking}. |
+| `ENTREGADO` | 🚀 | Thank you for trusting PC FIX! Enjoy your hardware! |
+
+## Environment Variables
+
+<ParamField path="RESEND_API_KEY" type="string" required>
+  Your Resend API key from the dashboard
+</ParamField>
+
+<ParamField path="EMAIL_FROM" type="string" default='PCFIX <noreply@pcfixbaru.com.ar>'>
+  The sender email address and name
+</ParamField>
+
+<ParamField path="REPLY_TO" type="string" default='pcfixbaru@gmail.com'>
+  Reply-to email address for customer responses
+</ParamField>
+
+<ParamField path="ADMIN_EMAIL" type="string">
+  Admin email for receiving notifications about new inquiries and receipts
+</ParamField>
+
+<ParamField path="FRONTEND_URL" type="string" default='http://localhost:4321'>
+  Frontend URL for generating links in emails
+</ParamField>
+
+## Testing Emails
+
+Resend provides a test mode for development:
+
+```typescript
+// Test email in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('📧 Email would be sent to:', to);
+  console.log('📝 Subject:', subject);
+}
+```
+
+## Deliverability Tips
+
+<AccordionGroup>
+  <Accordion title="Verify Your Domain">
+    Add SPF, DKIM, and DMARC records to your domain to improve deliverability and remove "via resend.com" from emails.
+  </Accordion>
+
+  <Accordion title="Use Professional Sender Names">
+    Use a recognizable sender name like "PCFIX" rather than just an email address.
+  </Accordion>
+
+  <Accordion title="Include Unsubscribe Links">
+    For marketing emails, always include an unsubscribe link to comply with regulations.
+  </Accordion>
+
+  <Accordion title="Monitor Bounce Rates">
+    Check your Resend dashboard regularly for bounced emails and remove invalid addresses.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+The email service includes error handling:
+
+```typescript
+if (error) {
+  console.error('🔥 Error sending email (Resend):', error);
+  return false; // Email failed to send
+}
+return true; // Email sent successfully
+```
+
+Always check the return value when sending critical emails:
+
+```typescript
+const sent = await emailService.sendStatusUpdate(...);
+if (!sent) {
+  // Handle email failure (log, retry, notify admin)
+  console.error('Failed to send status update email');
+}
+```
+
+## Rate Limits
+
+- **Free Tier**: 100 emails per day
+- **Paid Plans**: Higher limits based on plan
+
+<Warning>
+  Implement rate limiting or queueing for high-volume scenarios to avoid hitting API limits.
+</Warning>
+
+## Related Resources
+
+- [Resend Documentation](https://resend.com/docs)
+- [Email Best Practices](https://resend.com/docs/best-practices)
+- [Resend API Reference](https://resend.com/docs/api-reference)

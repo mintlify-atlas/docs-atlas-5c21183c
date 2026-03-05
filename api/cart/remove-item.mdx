@@ -1,0 +1,211 @@
+---
+title: 'Remove Item from Cart'
+api: 'POST /api/cart/sync'
+description: 'Remove an item from the shopping cart'
+---
+
+## Overview
+
+Removes a product from the user's shopping cart. This endpoint uses the cart synchronization mechanism - to remove an item, simply exclude it from the items array.
+
+## Authentication
+
+This endpoint requires authentication. Ensure the user is authorized to modify the cart.
+
+## Request Body
+
+<ParamField body="userId" type="number" required>
+  The unique identifier of the user whose cart you want to modify
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of cart items to keep. Exclude the item(s) you want to remove.
+  
+  <ParamField body="id" type="string" required>
+    The product ID (as a string)
+  </ParamField>
+  
+  <ParamField body="quantity" type="number" required>
+    The quantity of the product
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The complete updated cart object
+  
+  <ResponseField name="id" type="number">
+    Unique identifier for the cart
+  </ResponseField>
+  
+  <ResponseField name="userId" type="number">
+    The ID of the user who owns this cart
+  </ResponseField>
+  
+  <ResponseField name="items" type="array">
+    Array of remaining cart items (after removal)
+    
+    <ResponseField name="id" type="number">
+      Unique identifier for the cart item
+    </ResponseField>
+    
+    <ResponseField name="productoId" type="number">
+      The product ID for this cart item
+    </ResponseField>
+    
+    <ResponseField name="quantity" type="number">
+      Quantity of the product
+    </ResponseField>
+    
+    <ResponseField name="producto" type="object">
+      Complete product details
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request fails
+</ResponseField>
+
+## Example Request
+
+### Remove Single Item
+
+If the cart currently has items with IDs "789" and "456", and you want to remove item "456":
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 2
+      }
+    ]
+  }'
+```
+
+### Remove Multiple Items
+
+To remove multiple items, simply exclude them from the array:
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 2
+      }
+    ]
+  }'
+```
+
+### Clear Entire Cart
+
+To remove all items from the cart, send an empty items array:
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": []
+  }'
+```
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 123,
+    "abandonedEmailSent": false,
+    "items": [
+      {
+        "id": 45,
+        "cartId": 1,
+        "productoId": 789,
+        "quantity": 2,
+        "producto": {
+          "id": 789,
+          "name": "Gaming Mouse",
+          "price": 49.99,
+          "description": "High-performance gaming mouse"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Empty Cart Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 123,
+    "abandonedEmailSent": false,
+    "items": []
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": "User ID required"
+}
+```
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Item removed successfully |
+| 400 | Invalid user ID or request body |
+| 401 | Unauthorized access |
+| 500 | Server error - Failed to sync cart |
+
+## Important Notes
+
+<Warning>
+  The sync endpoint replaces ALL cart items. To remove an item, send a request with all items you want to KEEP, excluding the one(s) you want to remove.
+</Warning>
+
+<Info>
+  Removal workflow:
+  1. Fetch the current cart using GET `/api/cart/:userId`
+  2. Filter out the item(s) you want to remove from the items array
+  3. Send the remaining items back to the sync endpoint
+</Info>
+
+## Removal Strategies
+
+**Remove by exclusion**: The recommended approach is to exclude items you want to remove from the items array
+
+**Clear cart**: Send an empty items array to remove all items at once
+
+**Validation**: Only valid, non-deleted products are kept in the cart. Invalid product IDs are automatically filtered out
+
+**Side effects**: The `abandonedEmailSent` flag is reset to `false` when cart contents change

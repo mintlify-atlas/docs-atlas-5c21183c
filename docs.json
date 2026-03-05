@@ -1,122 +1,138 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "PC Fix",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#151c3b",
+    "light": "#5e6c89",
+    "dark": "#7f91b4"
   },
   "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/martin-ratti/PCFIX-Baru"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/martin-ratti/PCFIX-Baru"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Architecture",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "architecture/overview",
+              "architecture/monorepo",
+              "architecture/frontend",
+              "architecture/backend",
+              "architecture/database"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Features",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "features/authentication",
+              "features/shopping-cart",
+              "features/payment-processing",
+              "features/inventory-management",
+              "features/admin-dashboard"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Guides",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/environment-setup",
+              "guides/docker-deployment",
+              "guides/database-migrations",
+              "guides/testing"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Authentication",
             "pages": [
-              "api-reference/introduction"
+              "api/auth/login",
+              "api/auth/register",
+              "api/auth/google-oauth",
+              "api/auth/password-reset"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Products",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/products/list",
+              "api/products/create",
+              "api/products/update",
+              "api/products/delete"
+            ]
+          },
+          {
+            "group": "Cart & Checkout",
+            "pages": [
+              "api/cart/get",
+              "api/cart/add-item",
+              "api/cart/update-item",
+              "api/cart/remove-item"
+            ]
+          },
+          {
+            "group": "Sales",
+            "pages": [
+              "api/sales/create",
+              "api/sales/list",
+              "api/sales/get-by-id",
+              "api/sales/update-status"
+            ]
+          },
+          {
+            "group": "Admin",
+            "pages": [
+              "api/admin/stats",
+              "api/admin/users",
+              "api/admin/categories",
+              "api/admin/brands"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Payment Providers",
+            "pages": [
+              "integrations/mercadopago",
+              "integrations/crypto-payments"
+            ]
+          },
+          {
+            "group": "Cloud Services",
+            "pages": [
+              "integrations/cloudinary",
+              "integrations/resend-email",
+              "integrations/sentry"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

@@ -1,0 +1,423 @@
+---
+title: 'Sentry Error Monitoring'
+description: 'Configure and use Sentry for error tracking and performance monitoring in PC Fix'
+icon: 'shield-halved'
+---
+
+Sentry provides real-time error tracking and performance monitoring for both the frontend and backend of PC Fix. It helps identify, debug, and resolve issues quickly.
+
+## Overview
+
+PC Fix uses Sentry to monitor:
+- **Backend Errors**: API exceptions, database errors, server crashes
+- **Frontend Errors**: JavaScript errors, React component failures, Astro SSR errors
+- **Performance**: Request tracing, slow queries, response times
+
+## Configuration
+
+<Steps>
+  <Step title="Create a Sentry Account">
+    Sign up for a free account at [sentry.io](https://sentry.io). The free tier includes 5,000 errors per month.
+  </Step>
+
+  <Step title="Create Two Projects">
+    Create two projects in your Sentry organization:
+    - **Backend Project**: Node.js/Express
+    - **Frontend Project**: Astro
+    
+    Copy the DSN (Data Source Name) from each project.
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Add the DSNs to your environment files:
+
+    **Backend** (`packages/api/.env`):
+    ```bash
+    SENTRY_DSN=https://your-backend-dsn@sentry.io/project-id
+    NODE_ENV=production
+    ```
+
+    **Frontend** (`packages/web/.env`):
+    ```bash
+    PUBLIC_SENTRY_DSN=https://your-frontend-dsn@sentry.io/project-id
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  The frontend DSN is prefixed with `PUBLIC_` because it's exposed to the browser. Use separate DSNs for frontend and backend to organize errors properly.
+</Warning>
+
+## Backend Setup (Node.js/Express)
+
+Sentry is initialized at the very beginning of `packages/api/src/server.ts`:
+
+<CodeGroup>
+```typescript server.ts
+import 'dotenv/config';
+import * as Sentry from '@sentry/node';
+
+// Initialize Sentry first, before any other code
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0, // Capture 100% of transactions
+  });
+}
+
+// Rest of your server code...
+import express from 'express';
+const app = express();
+```
+</CodeGroup>
+
+<Note>
+  Sentry is only initialized if `SENTRY_DSN` is set, allowing you to disable monitoring in local development.
+</Note>
+
+### Automatic Error Capture
+
+With Sentry initialized, all uncaught exceptions and unhandled promise rejections are automatically captured:
+
+```typescript
+// This error will be automatically sent to Sentry
+app.get('/api/users/:id', async (req, res) => {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: parseInt(req.params.id) }
+  });
+  res.json(user);
+});
+```
+
+### Manual Error Capture
+
+You can manually capture errors with additional context:
+
+```typescript
+import * as Sentry from '@sentry/node';
+
+try {
+  await processPayment(order);
+} catch (error) {
+  Sentry.captureException(error, {
+    tags: {
+      section: 'payments',
+      order_id: order.id
+    },
+    extra: {
+      order_details: order,
+      payment_method: order.paymentMethod
+    }
+  });
+  throw error;
+}
+```
+
+### Adding User Context
+
+Attach user information to errors for better debugging:
+
+```typescript
+Sentry.setUser({
+  id: user.id,
+  email: user.email,
+  username: user.nombre
+});
+```
+
+## Frontend Setup (Astro)
+
+Sentry is conditionally integrated in `packages/web/astro.config.mjs`:
+
+<CodeGroup>
+```javascript astro.config.mjs
+import { defineConfig } from 'astro/config';
+import sentry from '@sentry/astro';
+
+export default defineConfig({
+  integrations: [
+    // ... other integrations
+    
+    // Conditionally enable Sentry
+    ...(process.env.PUBLIC_SENTRY_DSN ? [sentry({
+      dsn: process.env.PUBLIC_SENTRY_DSN,
+      sourceMapsUploadOptions: {
+        enabled: false, // Set to true in production
+      },
+    })] : [])
+  ],
+});
+```
+</CodeGroup>
+
+### Client-Side Error Capture
+
+Frontend errors are automatically captured:
+
+```typescript
+// Uncaught exceptions are automatically sent to Sentry
+const data = await fetch('/api/products').then(res => res.json());
+```
+
+### Manual Frontend Capture
+
+```typescript
+import * as Sentry from '@sentry/astro';
+
+try {
+  await submitForm(formData);
+} catch (error) {
+  Sentry.captureException(error, {
+    tags: { form: 'checkout' },
+    extra: { formData }
+  });
+  showErrorMessage('Failed to submit form');
+}
+```
+
+## Error Context
+
+Add contextual information to help debug issues:
+
+<CodeGroup>
+```typescript Tags
+Sentry.setTag('page', 'checkout');
+Sentry.setTag('payment_method', 'mercadopago');
+```
+
+```typescript Context
+Sentry.setContext('order', {
+  id: order.id,
+  total: order.total,
+  items: order.items.length
+});
+```
+
+```typescript Breadcrumbs
+Sentry.addBreadcrumb({
+  message: 'User clicked checkout button',
+  category: 'user-action',
+  level: 'info'
+});
+```
+</CodeGroup>
+
+## Performance Monitoring
+
+Sentry automatically tracks performance metrics:
+
+### Backend Performance
+
+```typescript
+import * as Sentry from '@sentry/node';
+
+const transaction = Sentry.startTransaction({
+  op: 'process-order',
+  name: 'Process Order Pipeline'
+});
+
+try {
+  const span1 = transaction.startChild({ op: 'validate' });
+  await validateOrder(order);
+  span1.finish();
+
+  const span2 = transaction.startChild({ op: 'payment' });
+  await processPayment(order);
+  span2.finish();
+
+  transaction.finish();
+} catch (error) {
+  transaction.setStatus('internal_error');
+  transaction.finish();
+  throw error;
+}
+```
+
+### Frontend Performance
+
+```typescript
+const transaction = Sentry.startTransaction({
+  name: 'Load Product Page',
+  op: 'page-load'
+});
+
+const span = transaction.startChild({
+  op: 'fetch',
+  description: 'Fetch product data'
+});
+
+await fetchProduct(id);
+span.finish();
+
+transaction.finish();
+```
+
+## Environment Configuration
+
+<ParamField path="SENTRY_DSN" type="string">
+  Backend Sentry DSN (kept secret on the server)
+</ParamField>
+
+<ParamField path="PUBLIC_SENTRY_DSN" type="string">
+  Frontend Sentry DSN (exposed to the browser)
+</ParamField>
+
+<ParamField path="NODE_ENV" type="string" default="development">
+  Environment name (development, staging, production)
+</ParamField>
+
+<ParamField path="tracesSampleRate" type="number" default={1.0}>
+  Percentage of transactions to monitor (1.0 = 100%)
+</ParamField>
+
+## Filtering Errors
+
+Exclude known errors or noisy issues:
+
+```typescript
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  beforeSend(event, hint) {
+    // Ignore specific errors
+    if (event.exception?.values?.[0]?.type === 'ChunkLoadError') {
+      return null;
+    }
+    
+    // Ignore errors from bots
+    if (event.request?.headers?.['user-agent']?.includes('bot')) {
+      return null;
+    }
+    
+    return event;
+  }
+});
+```
+
+## Release Tracking
+
+Track which version of your code is running:
+
+```typescript
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  release: process.env.VERCEL_GIT_COMMIT_SHA || 'dev',
+  environment: process.env.NODE_ENV
+});
+```
+
+## Integration with Error Handler
+
+Sentry works seamlessly with your existing error middleware:
+
+```typescript globalErrorHandler.ts
+import * as Sentry from '@sentry/node';
+
+export const globalErrorHandler = (err, req, res, next) => {
+  // Log to Sentry
+  Sentry.captureException(err, {
+    tags: {
+      path: req.path,
+      method: req.method
+    },
+    user: req.user ? {
+      id: req.user.id,
+      email: req.user.email
+    } : undefined
+  });
+
+  // Send response to client
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message
+  });
+};
+```
+
+## Dashboard Features
+
+<CardGroup cols={2}>
+  <Card title="Issues" icon="bug">
+    View and triage errors grouped by root cause
+  </Card>
+  
+  <Card title="Performance" icon="gauge">
+    Monitor transaction speeds and identify bottlenecks
+  </Card>
+  
+  <Card title="Releases" icon="rocket">
+    Track errors by deployment version
+  </Card>
+  
+  <Card title="Alerts" icon="bell">
+    Get notified of new errors via email, Slack, or webhooks
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Separate Projects">
+    Create separate Sentry projects for frontend and backend to keep errors organized and easier to filter.
+  </Accordion>
+
+  <Accordion title="Add Contextual Information">
+    Always include relevant context like user ID, order ID, or page name to make debugging easier.
+  </Accordion>
+
+  <Accordion title="Set Up Alerts">
+    Configure alerts for critical errors so you can respond quickly to production issues.
+  </Accordion>
+
+  <Accordion title="Sample in Production">
+    Use a lower `tracesSampleRate` (e.g., 0.1 = 10%) in high-traffic production environments to reduce costs.
+  </Accordion>
+
+  <Accordion title="Disable in Development">
+    Don't send errors to Sentry during local development. Only initialize when `SENTRY_DSN` is set.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Errors not appearing in Sentry">
+    - Verify your DSN is correct
+    - Check that `SENTRY_DSN` (backend) or `PUBLIC_SENTRY_DSN` (frontend) is set
+    - Ensure Sentry.init() is called before any other code
+    - Check your network/firewall isn't blocking sentry.io
+  </Accordion>
+
+  <Accordion title="Too many errors">
+    - Use `beforeSend` to filter out noisy errors
+    - Increase the issue alert threshold in Sentry settings
+    - Fix the underlying bugs causing repeated errors
+  </Accordion>
+
+  <Accordion title="Source maps not working">
+    Enable source map upload in production:
+    ```javascript
+    sentry({
+      dsn: process.env.PUBLIC_SENTRY_DSN,
+      sourceMapsUploadOptions: {
+        enabled: true,
+        authToken: process.env.SENTRY_AUTH_TOKEN
+      }
+    })
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+- Never log sensitive information (passwords, credit cards, tokens)
+- Use `beforeSend` to scrub PII (personally identifiable information)
+- Keep backend DSN secret (use `SENTRY_DSN` without `PUBLIC_` prefix)
+- Frontend DSN can be public (it's exposed in browser code)
+
+## Related Resources
+
+- [Sentry Node.js Documentation](https://docs.sentry.io/platforms/node/)
+- [Sentry Astro Documentation](https://docs.sentry.io/platforms/javascript/guides/astro/)
+- [Error Monitoring Best Practices](https://docs.sentry.io/product/issues/)
+- [Performance Monitoring Guide](https://docs.sentry.io/product/performance/)

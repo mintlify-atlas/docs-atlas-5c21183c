@@ -1,0 +1,756 @@
+---
+title: 'Backend Architecture'
+description: 'Express 5 REST API with Prisma ORM and modular architecture'
+icon: 'server'
+---
+
+## Overview
+
+The PC Fix backend is a **RESTful API** built with **Express 5**, featuring a modular architecture organized by domain. It uses **Prisma 6** as the ORM for PostgreSQL database access and implements industry-standard security practices.
+
+<Info>
+The API is deployed on Railway and serves as the data layer for the Astro frontend.
+</Info>
+
+## Core Technologies
+
+<CardGroup cols={2}>
+  <Card title="Express 5.2.1" icon="node">
+    Modern web application framework with async middleware support
+  </Card>
+  <Card title="Prisma 6.18" icon="database">
+    Type-safe ORM with automatic migrations and client generation
+  </Card>
+  <Card title="PostgreSQL" icon="elephant">
+    Robust relational database hosted on Railway
+  </Card>
+  <Card title="TypeScript 5.9" icon="code">
+    End-to-end type safety from database to API responses
+  </Card>
+</CardGroup>
+
+## Project Structure
+
+```bash
+packages/api/
+├── src/
+│   ├── modules/              # Feature modules (domain-driven)
+│   │   ├── auth/            # Authentication & authorization
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── auth.controller.ts
+│   │   │   └── auth.service.ts
+│   │   ├── products/        # Product management
+│   │   ├── categories/      # Category management
+│   │   ├── brands/          # Brand management
+│   │   ├── banners/         # Banner management
+│   │   ├── cart/            # Shopping cart
+│   │   ├── sales/           # Sales & orders
+│   │   ├── users/           # User management
+│   │   ├── favorites/       # Product favorites
+│   │   ├── technical/       # Technical support
+│   │   ├── stats/           # Analytics & statistics
+│   │   └── config/          # System configuration
+│   ├── shared/              # Shared utilities
+│   │   ├── database/        # Prisma client singleton
+│   │   │   └── prismaClient.ts
+│   │   ├── middlewares/     # Express middlewares
+│   │   │   ├── authMiddleware.ts
+│   │   │   ├── errorMiddleware.ts
+│   │   │   ├── rateLimitMiddleware.ts
+│   │   │   └── uploadMiddleware.ts
+│   │   ├── services/        # Shared services
+│   │   │   └── cron.service.ts
+│   │   └── utils/           # Utility functions
+│   │       └── AppError.ts
+│   └── server.ts            # Express app entry point
+├── prisma/
+│   ├── schema.prisma        # Database schema
+│   ├── seed.ts              # Database seeder
+│   └── migrations/          # Database migrations
+├── uploads/                 # Local file uploads (dev only)
+├── tsconfig.json
+└── package.json
+```
+
+## Server Setup
+
+### server.ts
+
+```typescript src/server.ts
+import 'dotenv/config';
+import * as Sentry from '@sentry/node';
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import path from 'path';
+import { prisma } from './shared/database/prismaClient';
+
+// Initialize Sentry
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+  });
+}
+
+// Import routes
+import authRoutes from './modules/auth/auth.routes';
+import productsRoutes from './modules/products/products.routes';
+import categoriesRoutes from './modules/categories/categories.routes';
+import brandsRoutes from './modules/brands/brands.routes';
+import bannersRoutes from './modules/banners/banners.routes';
+import statsRoutes from './modules/stats/stats.routes';
+import usersRoutes from './modules/users/users.routes';
+import salesRoutes from './modules/sales/sales.routes';
+import configRoutes from './modules/config/config.routes';
+import favoritesRoutes from './modules/favorites/favorites.routes';
+import technicalRoutes from './modules/technical/technical.routes';
+import cartRoutes from './modules/cart/cart.routes';
+
+import { AppError } from './shared/utils/AppError';
+import { globalErrorHandler } from './shared/middlewares/errorMiddleware';
+import { CronService } from './shared/services/cron.service';
+
+const app = express();
+app.set('trust proxy', 1);
+const PORT = process.env.PORT || 3002;
+
+// CORS configuration
+const FRONTEND_URL = process.env.FRONTEND_URL;
+const whitelist = [
+  'http://localhost:4321',
+  'http://localhost:4322',
+  'http://localhost:4323',
+  'http://localhost:3002',
+  'https://pcfixbaru.com.ar',
+  'https://www.pcfixbaru.com.ar',
+];
+
+if (FRONTEND_URL && FRONTEND_URL !== '*') {
+  const urls = FRONTEND_URL.split(',');
+  urls.forEach(url => {
+    if (!whitelist.includes(url.trim())) whitelist.push(url.trim());
+  });
+}
+
+const corsOptions: cors.CorsOptions = {
+  origin: function (origin, callback) {
+    if (FRONTEND_URL === '*') {
+      return callback(null, true);
+    }
+    if (!origin || whitelist.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      console.error(`🚫 Blocked by CORS: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Middleware stack
+app.use(cors(corsOptions));
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Rate limiting
+import { authLimiter, apiLimiter } from './shared/middlewares/rateLimitMiddleware';
+app.use('/api/', apiLimiter);
+app.use('/api/auth', authLimiter);
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productsRoutes);
+app.use('/api/categories', categoriesRoutes);
+app.use('/api/brands', brandsRoutes);
+app.use('/api/banners', bannersRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/favorites', favoritesRoutes);
+app.use('/api/technical', technicalRoutes);
+app.use('/api/cart', cartRoutes);
+
+// Health check
+app.get('/health', async (req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({
+      success: true,
+      message: 'API is healthy',
+      database: 'Connected',
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    console.error('Database Check Failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'API Error', 
+      database: 'Disconnected' 
+    });
+  }
+});
+
+// 404 handler
+app.use((req: Request, res: Response, next: NextFunction) => {
+  next(new AppError(`Route ${req.originalUrl} not found`, 404));
+});
+
+// Global error handler
+app.use(globalErrorHandler);
+
+// Start server
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 API_URL: ${process.env.API_URL || 'NOT SET'}`);
+  
+  try {
+    new CronService().start();
+  } catch (e) {
+    console.error('❌ Error starting Cron Jobs:', e);
+  }
+});
+
+export default app;
+```
+
+## Middleware Stack
+
+### Authentication Middleware
+
+```typescript src/shared/middlewares/authMiddleware.ts
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { AppError } from '../utils/AppError';
+import { prisma } from '../database/prismaClient';
+
+interface JwtPayload {
+  userId: number;
+  role: string;
+}
+
+export const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError('No token provided', 401);
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, role: true },
+    });
+    
+    if (!user) {
+      throw new AppError('User not found', 401);
+    }
+    
+    req.user = user;
+    next();
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      next(new AppError('Invalid token', 401));
+    } else {
+      next(error);
+    }
+  }
+};
+
+export const requireAdmin = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (req.user?.role !== 'ADMIN') {
+    throw new AppError('Admin access required', 403);
+  }
+  next();
+};
+```
+
+### Rate Limiting Middleware
+
+```typescript src/shared/middlewares/rateLimitMiddleware.ts
+import rateLimit from 'express-rate-limit';
+
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // 5 login attempts per window
+  message: 'Too many authentication attempts, please try again later.',
+  skipSuccessfulRequests: true,
+});
+```
+
+### Error Handling Middleware
+
+```typescript src/shared/middlewares/errorMiddleware.ts
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/AppError';
+import * as Sentry from '@sentry/node';
+
+export const globalErrorHandler = (
+  err: Error | AppError,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  // Log error to Sentry in production
+  if (process.env.NODE_ENV === 'production') {
+    Sentry.captureException(err);
+  }
+  
+  // Handle AppError
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      ...(err.errors && { errors: err.errors }),
+    });
+  }
+  
+  // Handle Prisma errors
+  if (err.name === 'PrismaClientKnownRequestError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Database error',
+    });
+  }
+  
+  // Generic error
+  console.error('Error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+  });
+};
+```
+
+### Upload Middleware (Cloudinary)
+
+```typescript src/shared/middlewares/uploadMiddleware.ts
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: 'pcfix-products',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [{ width: 800, height: 800, crop: 'limit' }],
+    };
+  },
+});
+
+export const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+```
+
+## Module Structure (Example: Products)
+
+### Routes
+
+```typescript src/modules/products/products.routes.ts
+import { Router } from 'express';
+import * as productController from './products.controller';
+import { authenticate, requireAdmin } from '../../shared/middlewares/authMiddleware';
+import { upload } from '../../shared/middlewares/uploadMiddleware';
+
+const router = Router();
+
+// Public routes
+router.get('/', productController.getAllProducts);
+router.get('/:id', productController.getProductById);
+router.get('/category/:categoryId', productController.getProductsByCategory);
+router.get('/featured', productController.getFeaturedProducts);
+
+// Admin routes
+router.post('/', authenticate, requireAdmin, upload.single('foto'), productController.createProduct);
+router.put('/:id', authenticate, requireAdmin, upload.single('foto'), productController.updateProduct);
+router.delete('/:id', authenticate, requireAdmin, productController.deleteProduct);
+
+export default router;
+```
+
+### Controller
+
+```typescript src/modules/products/products.controller.ts
+import { Request, Response, NextFunction } from 'express';
+import * as productService from './products.service';
+import { AppError } from '../../shared/utils/AppError';
+
+export const getAllProducts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { category, search, minPrice, maxPrice, page = 1, limit = 20 } = req.query;
+    
+    const products = await productService.getAllProducts({
+      category: category as string,
+      search: search as string,
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProductById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const product = await productService.getProductById(Number(id));
+    
+    if (!product) {
+      throw new AppError('Product not found', 404);
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createProduct = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const productData = req.body;
+    
+    if (req.file) {
+      productData.foto = req.file.path; // Cloudinary URL
+    }
+    
+    const product = await productService.createProduct(productData);
+    
+    res.status(201).json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+### Service
+
+```typescript src/modules/products/products.service.ts
+import { prisma } from '../../shared/database/prismaClient';
+import { Prisma } from '@prisma/client';
+
+interface GetProductsOptions {
+  category?: string;
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  page: number;
+  limit: number;
+}
+
+export const getAllProducts = async (options: GetProductsOptions) => {
+  const { category, search, minPrice, maxPrice, page, limit } = options;
+  const skip = (page - 1) * limit;
+  
+  const where: Prisma.ProductoWhereInput = {
+    deletedAt: null, // Exclude soft-deleted products
+    ...(category && { categoriaId: Number(category) }),
+    ...(search && {
+      OR: [
+        { nombre: { contains: search, mode: 'insensitive' } },
+        { descripcion: { contains: search, mode: 'insensitive' } },
+      ],
+    }),
+    ...(minPrice && { precio: { gte: minPrice } }),
+    ...(maxPrice && { precio: { lte: maxPrice } }),
+  };
+  
+  const [products, total] = await Promise.all([
+    prisma.producto.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        categoria: true,
+        marca: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.producto.count({ where }),
+  ]);
+  
+  return {
+    products,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
+export const getProductById = async (id: number) => {
+  return prisma.producto.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      categoria: true,
+      marca: true,
+    },
+  });
+};
+
+export const createProduct = async (data: any) => {
+  return prisma.producto.create({
+    data: {
+      nombre: data.nombre,
+      descripcion: data.descripcion,
+      precio: data.precio,
+      stock: data.stock,
+      foto: data.foto,
+      categoriaId: Number(data.categoriaId),
+      marcaId: data.marcaId ? Number(data.marcaId) : null,
+      isFeatured: data.isFeatured || false,
+    },
+  });
+};
+```
+
+## Prisma Client Setup
+
+```typescript src/shared/database/prismaClient.ts
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+## Background Jobs (Cron Service)
+
+```typescript src/shared/services/cron.service.ts
+import cron from 'node-cron';
+import { prisma } from '../database/prismaClient';
+
+export class CronService {
+  start() {
+    // Delete expired reset tokens daily at 2 AM
+    cron.schedule('0 2 * * *', async () => {
+      console.log('🧹 Cleaning expired reset tokens...');
+      await prisma.user.updateMany({
+        where: {
+          resetTokenExpires: { lt: new Date() },
+        },
+        data: {
+          resetToken: null,
+          resetTokenExpires: null,
+        },
+      });
+    });
+    
+    // Check for abandoned carts every hour
+    cron.schedule('0 * * * *', async () => {
+      console.log('🛒 Checking for abandoned carts...');
+      const abandonedCarts = await prisma.cart.findMany({
+        where: {
+          abandonedEmailSent: false,
+          updatedAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          items: { some: {} },
+        },
+        include: { user: true, items: true },
+      });
+      
+      // Send abandoned cart emails (implement with email service)
+      for (const cart of abandonedCarts) {
+        // await emailService.sendAbandonedCartEmail(cart);
+        await prisma.cart.update({
+          where: { id: cart.id },
+          data: { abandonedEmailSent: true },
+        });
+      }
+    });
+    
+    console.log('✅ Cron jobs started');
+  }
+}
+```
+
+## API Modules Overview
+
+<AccordionGroup>
+  <Accordion title="Auth Module">
+    - User registration and login
+    - JWT token generation and refresh
+    - Google OAuth integration
+    - Password reset functionality
+    - Token blacklisting
+  </Accordion>
+  
+  <Accordion title="Products Module">
+    - CRUD operations for products
+    - Filtering, searching, pagination
+    - Image upload to Cloudinary
+    - Soft delete functionality
+    - Featured products
+  </Accordion>
+  
+  <Accordion title="Categories Module">
+    - Hierarchical category structure
+    - Parent-child relationships
+    - Category-based product filtering
+  </Accordion>
+  
+  <Accordion title="Sales Module">
+    - Order creation and management
+    - Payment processing (MercadoPago)
+    - Order status workflow
+    - Shipping integration (Zipnova)
+    - Invoice generation
+  </Accordion>
+  
+  <Accordion title="Cart Module">
+    - Add/remove items
+    - Update quantities
+    - Abandoned cart tracking
+    - Cart persistence
+  </Accordion>
+  
+  <Accordion title="Technical Module">
+    - Support ticket creation
+    - Admin ticket management
+    - Service items catalog
+    - Response system
+  </Accordion>
+  
+  <Accordion title="Stats Module">
+    - Sales analytics
+    - Revenue reports
+    - Product performance metrics
+    - User statistics
+  </Accordion>
+</AccordionGroup>
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="JWT Authentication" icon="key">
+    Stateless authentication with access and refresh tokens
+  </Card>
+  <Card title="Password Hashing" icon="lock">
+    Bcrypt hashing with salt rounds for secure password storage
+  </Card>
+  <Card title="Rate Limiting" icon="gauge">
+    Protection against brute force and DDoS attacks
+  </Card>
+  <Card title="Helmet.js" icon="shield">
+    HTTP header security (XSS, clickjacking, etc.)
+  </Card>
+  <Card title="CORS" icon="globe">
+    Configurable cross-origin resource sharing
+  </Card>
+  <Card title="Input Validation" icon="check">
+    Zod schema validation on all endpoints
+  </Card>
+</CardGroup>
+
+## Testing
+
+```typescript src/modules/products/products.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import request from 'supertest';
+import app from '../../server';
+
+describe('Products API', () => {
+  it('GET /api/products returns products list', async () => {
+    const response = await request(app)
+      .get('/api/products')
+      .expect(200);
+    
+    expect(response.body.success).toBe(true);
+    expect(Array.isArray(response.body.data.products)).toBe(true);
+  });
+  
+  it('GET /api/products/:id returns single product', async () => {
+    const response = await request(app)
+      .get('/api/products/1')
+      .expect(200);
+    
+    expect(response.body.success).toBe(true);
+    expect(response.body.data).toHaveProperty('nombre');
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Database Schema" icon="database" href="/architecture/database">
+    Explore the Prisma schema
+  </Card>
+  <Card title="Frontend" icon="browser" href="/architecture/frontend">
+    Connect to the Astro frontend
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/backend">
+    Deploy to Railway
+  </Card>
+</CardGroup>

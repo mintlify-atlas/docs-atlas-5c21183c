@@ -1,0 +1,241 @@
+---
+title: 'List Sales'
+api: 'GET /api/sales'
+description: 'Get a paginated list of all sales (admin only) or user sales'
+---
+
+## Authentication
+
+This endpoint requires authentication with admin privileges to list all sales. Regular users can only access their own sales via the `/api/sales/my-sales` endpoint.
+
+## Endpoints
+
+### List All Sales (Admin)
+`GET /api/sales`
+
+Requires admin role.
+
+### List My Sales (User)
+`GET /api/sales/my-sales`
+
+Returns sales for the authenticated user.
+
+## Query Parameters
+
+<ParamField query="page" type="number" default="1">
+  Page number for pagination (admin endpoint only)
+</ParamField>
+
+<ParamField query="month" type="number">
+  Filter by month (1-12, admin endpoint only)
+</ParamField>
+
+<ParamField query="year" type="number">
+  Filter by year (admin endpoint only)
+</ParamField>
+
+<ParamField query="paymentMethod" type="string">
+  Filter by payment method (admin endpoint only). One of:
+  - `MERCADOPAGO`
+  - `EFECTIVO`
+  - `VIUMI`
+  - `TRANSFERENCIA`
+  - `BINANCE`
+</ParamField>
+
+<ParamField query="date" type="string">
+  Filter by specific date in format `YYYY-MM-DD` (admin endpoint only)
+</ParamField>
+
+## Response
+
+### All Sales Response (Admin)
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of sale objects
+  <ResponseField name="id" type="number">
+    Sale ID
+  </ResponseField>
+  <ResponseField name="fecha" type="string">
+    Sale date (ISO 8601 timestamp)
+  </ResponseField>
+  <ResponseField name="montoTotal" type="number">
+    Total amount including shipping
+  </ResponseField>
+  <ResponseField name="estado" type="string">
+    Sale status: `PENDIENTE_PAGO`, `PENDIENTE_APROBACION`, `APROBADO`, `ENVIADO`, `ENTREGADO`, `RECHAZADO`, `CANCELADO`
+  </ResponseField>
+  <ResponseField name="medioPago" type="string">
+    Payment method used
+  </ResponseField>
+  <ResponseField name="tipoEntrega" type="string">
+    Delivery type: `ENVIO` or `RETIRO`
+  </ResponseField>
+  <ResponseField name="costoEnvio" type="number">
+    Shipping cost
+  </ResponseField>
+  <ResponseField name="clienteId" type="number">
+    Customer ID
+  </ResponseField>
+  <ResponseField name="cliente" type="object">
+    Customer information
+  </ResponseField>
+  <ResponseField name="lineasVenta" type="array">
+    Array of line items with product details
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of sales matching the filters
+</ResponseField>
+
+<ResponseField name="page" type="number">
+  Current page number
+</ResponseField>
+
+<ResponseField name="totalPages" type="number">
+  Total number of pages
+</ResponseField>
+
+### My Sales Response (User)
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of user's sale objects (same structure as above)
+</ResponseField>
+
+## Example Request (Admin)
+
+```bash
+GET /api/sales?page=1&month=3&year=2026&paymentMethod=TRANSFERENCIA
+```
+
+## Example Request (User)
+
+```bash
+GET /api/sales/my-sales
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 789,
+      "fecha": "2026-03-05T10:30:00.000Z",
+      "montoTotal": 50000,
+      "estado": "APROBADO",
+      "medioPago": "TRANSFERENCIA",
+      "tipoEntrega": "ENVIO",
+      "costoEnvio": 5000,
+      "clienteId": 42,
+      "direccionEnvio": "Av. Corrientes 1234",
+      "ciudadEnvio": "Buenos Aires",
+      "provinciaEnvio": "Capital Federal",
+      "cpEnvio": "1414",
+      "codigoSeguimiento": "AR123456789",
+      "cliente": {
+        "id": 42,
+        "userId": 100,
+        "user": {
+          "email": "customer@example.com",
+          "nombre": "Juan",
+          "apellido": "Pérez"
+        }
+      },
+      "lineasVenta": [
+        {
+          "id": 1,
+          "productoId": 123,
+          "cantidad": 2,
+          "subTotal": 30000,
+          "producto": {
+            "id": 123,
+            "nombre": "Procesador AMD Ryzen 5",
+            "precio": 15000,
+            "foto": "https://example.com/cpu.jpg"
+          }
+        },
+        {
+          "id": 2,
+          "productoId": 456,
+          "cantidad": 1,
+          "subTotal": 15000,
+          "producto": {
+            "id": 456,
+            "nombre": "Memoria RAM 8GB",
+            "precio": 15000,
+            "foto": "https://example.com/ram.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "id": 790,
+      "fecha": "2026-03-04T15:20:00.000Z",
+      "montoTotal": 25000,
+      "estado": "ENVIADO",
+      "medioPago": "MERCADOPAGO",
+      "tipoEntrega": "ENVIO",
+      "costoEnvio": 5000,
+      "clienteId": 42,
+      "codigoSeguimiento": "AR987654321",
+      "cliente": {
+        "id": 42,
+        "userId": 100
+      },
+      "lineasVenta": [
+        {
+          "id": 3,
+          "productoId": 789,
+          "cantidad": 1,
+          "subTotal": 20000,
+          "producto": {
+            "id": 789,
+            "nombre": "Mouse Gaming",
+            "precio": 20000
+          }
+        }
+      ]
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "totalPages": 3
+}
+```
+
+## Error Responses
+
+### Unauthorized (401)
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
+
+### Forbidden - Not Admin (403)
+```json
+{
+  "success": false,
+  "error": "Admin access required"
+}
+```
+
+## Notes
+
+- The `/api/sales` endpoint is restricted to admin users only
+- Results are paginated with 20 items per page
+- The `/api/sales/my-sales` endpoint returns all sales for the authenticated user without pagination
+- Sales include full details of line items and associated products
+- Filters can be combined to narrow down results

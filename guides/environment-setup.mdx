@@ -1,0 +1,318 @@
+---
+title: "Environment Setup"
+description: "Configure environment variables and external services for PC Fix"
+---
+
+PC Fix requires several environment variables and external service integrations to function properly. This guide covers all configuration needed for both the frontend and backend.
+
+## Overview
+
+The PC Fix monorepo has two main packages that require separate environment configuration:
+
+- **packages/api**: Backend API with database, authentication, and integrations
+- **packages/web**: Frontend application with Astro and React
+
+<Note>
+Never commit `.env` files to version control. Add them to `.gitignore` and use `.env.example` as a template.
+</Note>
+
+## Backend Environment Variables
+
+Create `packages/api/.env` with the following configuration:
+
+### Database Configuration
+
+```bash .env
+# PostgreSQL Database
+DATABASE_URL="postgresql://admin:password123@localhost:5432/pcfix_db?schema=public"
+```
+
+<Accordion title="Database URL Format">
+The `DATABASE_URL` follows this format:
+```
+postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=SCHEMA
+```
+
+- **USER**: Database username (default: `admin`)
+- **PASSWORD**: Database password (default: `password123`)
+- **HOST**: Database host (`localhost` for local, `postgres` for Docker)
+- **PORT**: Database port (default: `5432`)
+- **DATABASE**: Database name (default: `pcfix_db`)
+</Accordion>
+
+### Authentication & Security
+
+```bash .env
+# JWT Configuration
+JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
+JWT_REFRESH_SECRET="your-refresh-token-secret-change-this-too"
+JWT_EXPIRES_IN="7d"
+JWT_REFRESH_EXPIRES_IN="30d"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
+```
+
+<Steps>
+  <Step title="Generate JWT Secrets">
+    Generate secure random strings for JWT secrets:
+    ```bash
+    node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+    ```
+  </Step>
+  <Step title="Configure Google OAuth">
+    1. Go to [Google Cloud Console](https://console.cloud.google.com)
+    2. Create a new project or select existing
+    3. Enable Google+ API
+    4. Create OAuth 2.0 credentials
+    5. Add authorized redirect URIs
+    6. Copy the Client ID to your `.env`
+  </Step>
+</Steps>
+
+### External Services
+
+```bash .env
+# Cloudinary (Image CDN)
+CLOUDINARY_CLOUD_NAME="your-cloud-name"
+CLOUDINARY_API_KEY="your-api-key"
+CLOUDINARY_API_SECRET="your-api-secret"
+
+# MercadoPago (Payment Gateway)
+MERCADOPAGO_ACCESS_TOKEN="your-mercadopago-access-token"
+
+# Resend (Email Service)
+RESEND_API_KEY="re_your_api_key_here"
+EMAIL_FROM="noreply@yourdomain.com"
+
+# Sentry (Error Monitoring)
+SENTRY_DSN="https://your-sentry-dsn@sentry.io/project-id"
+```
+
+### Server Configuration
+
+```bash .env
+# Server
+PORT=3002
+NODE_ENV="development"
+API_URL="http://localhost:3002"
+
+# Frontend URL (for CORS)
+FRONTEND_URL="http://localhost:4321"
+```
+
+## Frontend Environment Variables
+
+Create `packages/web/.env` with the following configuration:
+
+### API Connection
+
+```bash .env
+# Public API URL (for client-side requests)
+PUBLIC_API_URL="http://localhost:3002/api"
+
+# SSR API URL (for server-side requests in Docker)
+SSR_API_URL="http://localhost:3002/api"
+```
+
+<Note>
+In Docker environments, use `SSR_API_URL="http://api:3002/api"` to leverage Docker's internal networking.
+</Note>
+
+### Google OAuth (Frontend)
+
+```bash .env
+# Google OAuth Client ID (same as backend)
+PUBLIC_GOOGLE_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
+```
+
+### Sentry (Frontend)
+
+```bash .env
+# Sentry DSN for frontend monitoring
+PUBLIC_SENTRY_DSN="https://your-frontend-sentry-dsn@sentry.io/project-id"
+```
+
+## External Services Setup
+
+<AccordionGroup>
+  <Accordion title="Cloudinary Setup">
+    1. Sign up at [cloudinary.com](https://cloudinary.com)
+    2. Navigate to Dashboard
+    3. Copy **Cloud Name**, **API Key**, and **API Secret**
+    4. Add credentials to `packages/api/.env`
+    
+    Used for:
+    - Product image uploads
+    - Payment receipt uploads
+    - CDN delivery
+  </Accordion>
+
+  <Accordion title="MercadoPago Setup">
+    1. Create account at [mercadopago.com](https://www.mercadopago.com.ar)
+    2. Go to [Your integrations](https://www.mercadopago.com.ar/developers/panel/app)
+    3. Create a new application
+    4. Copy the **Access Token** (use Test credentials for development)
+    5. Configure webhook URL: `https://your-api-url.com/api/sales/mp-webhook`
+    
+    Test cards for development:
+    - Approved: `4509 9535 6623 3704` (any future date, any CVV)
+    - Rejected: `4017 1410 1414 1234`
+  </Accordion>
+
+  <Accordion title="Resend Setup">
+    1. Sign up at [resend.com](https://resend.com)
+    2. Verify your domain or use their test domain
+    3. Generate an API key
+    4. Add to `packages/api/.env`
+    
+    Emails sent:
+    - Order confirmations
+    - Payment receipts
+    - Password reset links
+    - Abandoned cart reminders
+    - Stock alerts
+  </Accordion>
+
+  <Accordion title="Sentry Setup">
+    1. Sign up at [sentry.io](https://sentry.io)
+    2. Create two projects:
+       - **PC Fix API** (Node.js)
+       - **PC Fix Web** (Astro/Browser)
+    3. Copy both DSN values
+    4. Add to respective `.env` files
+    
+    Monitoring:
+    - Backend: Server errors, unhandled exceptions
+    - Frontend: JavaScript errors, failed requests
+  </Accordion>
+</AccordionGroup>
+
+## Environment Templates
+
+Create `.env.example` files in both packages for team reference:
+
+<Tabs>
+  <Tab title="API .env.example">
+```bash packages/api/.env.example
+# Database
+DATABASE_URL="postgresql://admin:password123@localhost:5432/pcfix_db?schema=public"
+
+# JWT
+JWT_SECRET="change-this-secret"
+JWT_REFRESH_SECRET="change-this-too"
+JWT_EXPIRES_IN="7d"
+JWT_REFRESH_EXPIRES_IN="30d"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="your-google-client-id"
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME="your-cloud-name"
+CLOUDINARY_API_KEY="your-api-key"
+CLOUDINARY_API_SECRET="your-api-secret"
+
+# MercadoPago
+MERCADOPAGO_ACCESS_TOKEN="your-access-token"
+
+# Resend
+RESEND_API_KEY="re_your_api_key"
+EMAIL_FROM="noreply@yourdomain.com"
+
+# Sentry
+SENTRY_DSN="https://your-sentry-dsn@sentry.io/id"
+
+# Server
+PORT=3002
+NODE_ENV="development"
+API_URL="http://localhost:3002"
+FRONTEND_URL="http://localhost:4321"
+```
+  </Tab>
+  <Tab title="Web .env.example">
+```bash packages/web/.env.example
+# API URLs
+PUBLIC_API_URL="http://localhost:3002/api"
+SSR_API_URL="http://localhost:3002/api"
+
+# Google OAuth
+PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
+
+# Sentry
+PUBLIC_SENTRY_DSN="https://your-frontend-sentry-dsn@sentry.io/id"
+```
+  </Tab>
+</Tabs>
+
+## Validation
+
+Verify your configuration is correct:
+
+<Steps>
+  <Step title="Test Database Connection">
+    ```bash
+    cd packages/api
+    npm run db:studio
+    ```
+    Should open Prisma Studio at `http://localhost:5555`
+  </Step>
+  <Step title="Test API Server">
+    ```bash
+    cd packages/api
+    npm run dev
+    ```
+    Visit `http://localhost:3002/health` - should return JSON with `{"success": true}`
+  </Step>
+  <Step title="Test Frontend">
+    ```bash
+    cd packages/web
+    npm run dev
+    ```
+    Visit `http://localhost:4321` - should load the home page
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<Accordion title="Database connection failed">
+  - Verify PostgreSQL is running: `pg_isready`
+  - Check DATABASE_URL format and credentials
+  - Ensure database `pcfix_db` exists
+  - For Docker: use host `postgres` instead of `localhost`
+</Accordion>
+
+<Accordion title="JWT errors">
+  - Ensure JWT_SECRET is set and not empty
+  - Regenerate secrets if you suspect compromise
+  - Check token expiration times are valid
+</Accordion>
+
+<Accordion title="CORS errors">
+  - Verify FRONTEND_URL matches your frontend's actual URL
+  - Include protocol (http:// or https://)
+  - For Docker, add both `localhost` and container URLs to whitelist
+</Accordion>
+
+<Accordion title="External service errors">
+  - Test API keys in service dashboards first
+  - Check for typos in credentials
+  - Verify services are not rate-limited
+  - Check service status pages for outages
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/guides/docker-deployment">
+    Deploy PC Fix with Docker Compose
+  </Card>
+  <Card title="Database Migrations" icon="database" href="/guides/database-migrations">
+    Manage database schema changes
+  </Card>
+  <Card title="Testing" icon="flask" href="/guides/testing">
+    Run unit and E2E tests
+  </Card>
+  <Card title="Integrations" icon="plug" href="/integrations/mercadopago">
+    Configure payment providers
+  </Card>
+</CardGroup>

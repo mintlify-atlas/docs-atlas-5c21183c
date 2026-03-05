@@ -1,0 +1,143 @@
+---
+title: 'Get Cart'
+api: 'GET /api/cart/:userId'
+description: 'Retrieve the shopping cart for a specific user'
+---
+
+## Overview
+
+Retrieves the complete shopping cart for a user, including all cart items and their associated product details.
+
+## Authentication
+
+This endpoint requires authentication. Ensure the user has permission to access the specified cart.
+
+## Path Parameters
+
+<ParamField path="userId" type="number" required>
+  The unique identifier of the user whose cart you want to retrieve
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The cart object containing all cart details
+  
+  <ResponseField name="id" type="number">
+    Unique identifier for the cart
+  </ResponseField>
+  
+  <ResponseField name="userId" type="number">
+    The ID of the user who owns this cart
+  </ResponseField>
+  
+  <ResponseField name="abandonedEmailSent" type="boolean">
+    Whether an abandoned cart email has been sent
+  </ResponseField>
+  
+  <ResponseField name="items" type="array">
+    Array of cart items
+    
+    <ResponseField name="id" type="number">
+      Unique identifier for the cart item
+    </ResponseField>
+    
+    <ResponseField name="cartId" type="number">
+      Reference to the parent cart
+    </ResponseField>
+    
+    <ResponseField name="productoId" type="number">
+      The product ID for this cart item
+    </ResponseField>
+    
+    <ResponseField name="quantity" type="number">
+      Quantity of the product in the cart
+    </ResponseField>
+    
+    <ResponseField name="producto" type="object">
+      Complete product details including name, price, description, images, etc.
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request fails
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET "https://api.pcfix.com/api/cart/123" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 123,
+    "abandonedEmailSent": false,
+    "items": [
+      {
+        "id": 45,
+        "cartId": 1,
+        "productoId": 789,
+        "quantity": 2,
+        "producto": {
+          "id": 789,
+          "name": "Gaming Mouse",
+          "price": 49.99,
+          "description": "High-performance gaming mouse",
+          "imageUrl": "https://example.com/mouse.jpg"
+        }
+      },
+      {
+        "id": 46,
+        "cartId": 1,
+        "productoId": 456,
+        "quantity": 1,
+        "producto": {
+          "id": 456,
+          "name": "Mechanical Keyboard",
+          "price": 129.99,
+          "description": "RGB mechanical keyboard",
+          "imageUrl": "https://example.com/keyboard.jpg"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": "User ID required"
+}
+```
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Cart retrieved successfully |
+| 400 | Invalid user ID |
+| 401 | Unauthorized access |
+| 500 | Server error - Failed to get cart |
+
+## Notes
+
+- If the user has no cart, the response will return `null` for the data field
+- Only non-deleted products are included in the cart items
+- Product details are fully populated in the response

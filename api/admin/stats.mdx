@@ -1,0 +1,227 @@
+---
+title: 'Stats'
+description: 'Dashboard statistics and sales intelligence endpoints for administrators'
+---
+
+## Get Dashboard Stats
+
+<RequestExample>
+```http
+GET /api/stats
+```
+</RequestExample>
+
+Retrieves key dashboard metrics including product counts, user statistics, and pending items.
+
+### Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with admin privileges
+</ParamField>
+
+**Requires:** Admin role (`requireAdmin` middleware)
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  Dashboard statistics object
+  
+  <ResponseField name="totalProducts" type="number">
+    Total number of active products in the system
+  </ResponseField>
+  
+  <ResponseField name="lowStockProducts" type="number">
+    Number of products with stock level of 5 or less
+  </ResponseField>
+  
+  <ResponseField name="totalUsers" type="number">
+    Total number of registered users
+  </ResponseField>
+  
+  <ResponseField name="recentSales" type="number">
+    Total count of all sales
+  </ResponseField>
+  
+  <ResponseField name="pendingInquiries" type="number">
+    Number of pending technical consultations
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "totalProducts": 245,
+    "lowStockProducts": 12,
+    "totalUsers": 1523,
+    "recentSales": 487,
+    "pendingInquiries": 8
+  }
+}
+```
+</ResponseExample>
+
+---
+
+## Get Sales Intelligence
+
+<RequestExample>
+```http
+GET /api/stats/intelligence
+```
+</RequestExample>
+
+Retrieves comprehensive sales analytics including revenue metrics, trends, top products, and dead stock analysis.
+
+### Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with admin privileges
+</ParamField>
+
+**Requires:** Admin role (`requireAdmin` middleware)
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  Sales intelligence data object
+  
+  <ResponseField name="kpis" type="object">
+    Key performance indicators
+    
+    <ResponseField name="grossRevenue" type="number">
+      Total revenue for the current month (approved, sent, and delivered sales)
+    </ResponseField>
+    
+    <ResponseField name="lowStockProducts" type="number">
+      Number of products with stock level of 5 or less
+    </ResponseField>
+    
+    <ResponseField name="pendingReview" type="number">
+      Number of sales pending approval
+    </ResponseField>
+    
+    <ResponseField name="pendingSupport" type="number">
+      Number of pending technical consultations
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="charts" type="object">
+    Chart data for visualization
+    
+    <ResponseField name="salesTrend" type="array">
+      Daily sales data for the last 30 days
+      
+      <ResponseField name="date" type="string">
+        Date in ISO format (YYYY-MM-DD)
+      </ResponseField>
+      
+      <ResponseField name="count" type="number">
+        Number of sales on that date
+      </ResponseField>
+      
+      <ResponseField name="total" type="number">
+        Total sales amount on that date
+      </ResponseField>
+    </ResponseField>
+    
+    <ResponseField name="topProducts" type="array">
+      Top 5 selling products in the last 30 days
+      
+      <ResponseField name="name" type="string">
+        Product name
+      </ResponseField>
+      
+      <ResponseField name="quantity" type="number">
+        Total quantity sold
+      </ResponseField>
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="deadStock" type="array">
+    Products with no sales activity in the last 90 days
+    
+    <ResponseField name="id" type="number">
+      Product ID
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Product name
+    </ResponseField>
+    
+    <ResponseField name="stock" type="number">
+      Current stock quantity
+    </ResponseField>
+    
+    <ResponseField name="price" type="number">
+      Product price
+    </ResponseField>
+    
+    <ResponseField name="lastSale" type="string" nullable>
+      Date of last sale (ISO format) or null if never sold
+    </ResponseField>
+    
+    <ResponseField name="daysInactive" type="number">
+      Number of days since last sale or creation
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "kpis": {
+      "grossRevenue": 45230.50,
+      "lowStockProducts": 12,
+      "pendingReview": 5,
+      "pendingSupport": 8
+    },
+    "charts": {
+      "salesTrend": [
+        {
+          "date": "2026-02-05",
+          "count": 15,
+          "total": 3250.75
+        },
+        {
+          "date": "2026-02-06",
+          "count": 18,
+          "total": 4120.00
+        }
+      ],
+      "topProducts": [
+        {
+          "name": "RTX 4090 Graphics Card",
+          "quantity": 45
+        },
+        {
+          "name": "Intel Core i9-14900K",
+          "quantity": 38
+        }
+      ]
+    },
+    "deadStock": [
+      {
+        "id": 123,
+        "name": "Old Keyboard Model",
+        "stock": 25,
+        "price": 45.99,
+        "lastSale": "2025-10-15T10:30:00Z",
+        "daysInactive": 142
+      }
+    ]
+  }
+}
+```
+</ResponseExample>

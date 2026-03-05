@@ -1,0 +1,240 @@
+---
+title: 'Cloudinary Image CDN'
+description: 'Configure and use Cloudinary for image upload and CDN delivery in PC Fix'
+icon: 'cloud'
+---
+
+Cloudinary is used in PC Fix for storing and delivering product images and receipt uploads through a global CDN. This integration provides automatic image optimization, format conversion, and secure storage.
+
+## Overview
+
+PC Fix uses Cloudinary for:
+- **Product Images**: Automatically converted to WebP format for optimal performance
+- **Receipt Uploads**: Supports images and PDF files for payment verification
+- **CDN Delivery**: Fast global content delivery through Cloudinary's CDN
+
+## Configuration
+
+<Steps>
+  <Step title="Create a Cloudinary Account">
+    Sign up for a free account at [cloudinary.com](https://cloudinary.com). The free tier includes 25GB storage and 25GB bandwidth per month.
+  </Step>
+
+  <Step title="Get Your API Credentials">
+    Navigate to your Cloudinary Dashboard and copy:
+    - Cloud Name
+    - API Key
+    - API Secret
+  </Step>
+
+  <Step title="Set Environment Variables">
+    Add these variables to your `.env` file in the `packages/api` directory:
+
+    ```bash
+    CLOUDINARY_CLOUD_NAME=your_cloud_name
+    CLOUDINARY_API_KEY=your_api_key
+    CLOUDINARY_API_SECRET=your_api_secret
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  Never commit your `.env` file to version control. Cloudinary credentials should remain secret.
+</Note>
+
+## Implementation
+
+### Upload Middleware
+
+Cloudinary is configured in the upload middleware at `packages/api/src/shared/middlewares/uploadMiddleware.ts`:
+
+<CodeGroup>
+```typescript uploadMiddleware.ts
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Product image storage
+const productStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req: any, file: any) => {
+    return {
+      folder: 'pcfix-products',
+      format: 'webp',
+      public_id: `foto-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+    };
+  },
+});
+
+// Receipt storage
+const receiptStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req: any, file: any) => {
+    return {
+      folder: 'pcfix-receipts',
+      resource_type: 'auto',
+      public_id: `comprobante-${Date.now()}-${Math.round(Math.random() * 1e9)}`,
+    };
+  },
+});
+```
+</CodeGroup>
+
+### Upload Instances
+
+Two multer instances are exported for different use cases:
+
+<CodeGroup>
+```typescript Product Images
+export const upload = multer({
+  storage: productStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: imageFilter, // jpg, jpeg, png, webp, gif
+});
+```
+
+```typescript Receipt Uploads
+export const uploadReceipt = multer({
+  storage: receiptStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: receiptFilter, // images + PDF
+});
+```
+</CodeGroup>
+
+## Usage Examples
+
+### Uploading Product Images
+
+Use the `upload` middleware in your routes:
+
+```typescript
+import { upload } from '@/shared/middlewares/uploadMiddleware';
+
+// Single image upload
+router.post('/products', 
+  authMiddleware,
+  adminMiddleware,
+  upload.single('foto'),
+  createProduct
+);
+
+// Access uploaded file URL
+const imageUrl = req.file?.path; // Cloudinary URL
+```
+
+### Uploading Receipts
+
+Use the `uploadReceipt` middleware for payment verification:
+
+```typescript
+import { uploadReceipt } from '@/shared/middlewares/uploadMiddleware';
+
+router.post('/sales/:id/receipt',
+  authMiddleware,
+  uploadReceipt.single('comprobante'),
+  uploadReceipt
+);
+
+const receiptUrl = req.file?.path; // Cloudinary URL
+```
+
+## Frontend Configuration
+
+To enable Cloudinary URLs in Astro, add the domain to your `astro.config.mjs`:
+
+```javascript astro.config.mjs
+export default defineConfig({
+  image: {
+    domains: [
+      'res.cloudinary.com' // Cloudinary CDN
+    ],
+    remotePatterns: [{ protocol: "https" }],
+  },
+});
+```
+
+Add preconnect to improve loading performance in your layout:
+
+```html Layout.astro
+<link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+```
+
+## Folder Structure
+
+Cloudinary organizes uploads into folders:
+
+- `pcfix-products/` - Product images (auto-converted to WebP)
+- `pcfix-receipts/` - Payment receipts (images and PDFs)
+
+## File Constraints
+
+<CardGroup cols={2}>
+  <Card title="Product Images" icon="image">
+    - **Max Size**: 5MB
+    - **Formats**: JPEG, PNG, WebP, GIF
+    - **Output**: Auto-converted to WebP
+  </Card>
+  
+  <Card title="Receipts" icon="file">
+    - **Max Size**: 10MB
+    - **Formats**: JPEG, PNG, WebP, GIF, PDF
+    - **Output**: Original format preserved
+  </Card>
+</CardGroup>
+
+## Benefits
+
+<AccordionGroup>
+  <Accordion title="Automatic Optimization">
+    Product images are automatically converted to WebP format, reducing file size by up to 30% while maintaining quality.
+  </Accordion>
+
+  <Accordion title="Global CDN">
+    Images are delivered through Cloudinary's global CDN, ensuring fast load times for users worldwide.
+  </Accordion>
+
+  <Accordion title="Unique File Names">
+    Files are automatically renamed using timestamps and random numbers to prevent collisions.
+  </Accordion>
+
+  <Accordion title="Scalable Storage">
+    No need to manage file storage on your server. Cloudinary handles all storage and scaling automatically.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Upload fails with 401 error">
+    Check that your `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` are correct in your `.env` file.
+  </Accordion>
+
+  <Accordion title="Images not loading in frontend">
+    Ensure `res.cloudinary.com` is added to the `domains` array in `astro.config.mjs`.
+  </Accordion>
+
+  <Accordion title="File size too large">
+    Product images are limited to 5MB, receipts to 10MB. Compress images before uploading or adjust the limits in `uploadMiddleware.ts`.
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+- API credentials are validated server-side only
+- File type restrictions prevent unauthorized file uploads
+- Unique file names prevent directory traversal attacks
+- CORS configuration restricts access to authorized domains
+
+## Related Resources
+
+- [Cloudinary Documentation](https://cloudinary.com/documentation)
+- [Multer Storage Cloudinary](https://www.npmjs.com/package/multer-storage-cloudinary)
+- [Image Optimization Best Practices](https://cloudinary.com/documentation/image_optimization)

@@ -1,0 +1,184 @@
+---
+title: 'Add Item to Cart'
+api: 'POST /api/cart/sync'
+description: 'Add a new item to the shopping cart'
+---
+
+## Overview
+
+Adds a new product to the user's shopping cart. This endpoint uses the cart synchronization mechanism to add items while preserving existing cart contents.
+
+## Authentication
+
+This endpoint requires authentication. Ensure the user is authorized to modify the cart.
+
+## Request Body
+
+<ParamField body="userId" type="number" required>
+  The unique identifier of the user whose cart you want to modify
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of cart items to sync. To add a new item, include all existing items plus the new one.
+  
+  <ParamField body="id" type="string" required>
+    The product ID to add to the cart (as a string)
+  </ParamField>
+  
+  <ParamField body="quantity" type="number" required>
+    The quantity of the product to add (must be greater than 0)
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates whether the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The complete updated cart object
+  
+  <ResponseField name="id" type="number">
+    Unique identifier for the cart
+  </ResponseField>
+  
+  <ResponseField name="userId" type="number">
+    The ID of the user who owns this cart
+  </ResponseField>
+  
+  <ResponseField name="items" type="array">
+    Array of all cart items including the newly added item
+    
+    <ResponseField name="id" type="number">
+      Unique identifier for the cart item
+    </ResponseField>
+    
+    <ResponseField name="productoId" type="number">
+      The product ID for this cart item
+    </ResponseField>
+    
+    <ResponseField name="quantity" type="number">
+      Quantity of the product in the cart
+    </ResponseField>
+    
+    <ResponseField name="producto" type="object">
+      Complete product details
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request fails
+</ResponseField>
+
+## Example Request
+
+### Adding First Item
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 2
+      }
+    ]
+  }'
+```
+
+### Adding Item to Existing Cart
+
+```bash
+curl -X POST "https://api.pcfix.com/api/cart/sync" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 123,
+    "items": [
+      {
+        "id": "789",
+        "quantity": 2
+      },
+      {
+        "id": "456",
+        "quantity": 1
+      }
+    ]
+  }'
+```
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 123,
+    "abandonedEmailSent": false,
+    "items": [
+      {
+        "id": 45,
+        "cartId": 1,
+        "productoId": 789,
+        "quantity": 2,
+        "producto": {
+          "id": 789,
+          "name": "Gaming Mouse",
+          "price": 49.99,
+          "description": "High-performance gaming mouse"
+        }
+      },
+      {
+        "id": 46,
+        "cartId": 1,
+        "productoId": 456,
+        "quantity": 1,
+        "producto": {
+          "id": 456,
+          "name": "Mechanical Keyboard",
+          "price": 129.99,
+          "description": "RGB mechanical keyboard"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "error": "User ID required"
+}
+```
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Item added successfully |
+| 400 | Invalid user ID or request body |
+| 401 | Unauthorized access |
+| 500 | Server error - Failed to sync cart |
+
+## Important Notes
+
+<Warning>
+  The sync endpoint replaces ALL cart items. To add a new item, you must include all existing items in the request along with the new item.
+</Warning>
+
+- Product IDs must be valid and reference non-deleted products
+- Invalid product IDs are automatically filtered out
+- The `abandonedEmailSent` flag is reset to `false` when items are added
+- If an empty items array is provided, the cart will be cleared
+- Product ID should be sent as a string in the request body

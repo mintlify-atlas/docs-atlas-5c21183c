@@ -1,0 +1,182 @@
+---
+title: 'Register'
+api: 'POST /api/auth/register'
+description: 'Create a new user account'
+---
+
+## Endpoint
+
+```
+POST /api/auth/register
+```
+
+Creates a new user account with the provided information. Automatically creates an associated customer profile and sends a welcome email.
+
+## Request Body
+
+<ParamField body="email" type="string" required>
+  User's email address. Must be a valid email format and unique in the system.
+</ParamField>
+
+<ParamField body="nombre" type="string" required>
+  User's first name. Must be at least 2 characters long.
+</ParamField>
+
+<ParamField body="apellido" type="string" required>
+  User's last name. Must be at least 2 characters long.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password. Must be at least 6 characters long.
+</ParamField>
+
+<ParamField body="telefono" type="string" optional>
+  User's phone number (optional).
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the request was successful.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Contains the newly created user data and JWT token.
+  
+  <Expandable title="data properties">
+    <ResponseField name="user" type="object">
+      User object containing profile information.
+      
+      <Expandable title="user properties">
+        <ResponseField name="id" type="number">
+          Unique user identifier.
+        </ResponseField>
+        
+        <ResponseField name="email" type="string">
+          User's email address.
+        </ResponseField>
+        
+        <ResponseField name="nombre" type="string">
+          User's first name.
+        </ResponseField>
+        
+        <ResponseField name="apellido" type="string">
+          User's last name.
+        </ResponseField>
+        
+        <ResponseField name="telefono" type="string" nullable>
+          User's phone number (optional).
+        </ResponseField>
+        
+        <ResponseField name="role" type="string">
+          User's role (default: "USER").
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="token" type="string">
+      JWT authentication token valid for 7 days.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Status Codes
+
+<ResponseField name="201" type="Created">
+  Registration successful. Returns user data and JWT token.
+</ResponseField>
+
+<ResponseField name="400" type="Bad Request">
+  Invalid request body or validation error.
+</ResponseField>
+
+<ResponseField name="409" type="Conflict">
+  Email already registered in the system.
+</ResponseField>
+
+## Error Response
+
+```json
+{
+  "success": false,
+  "error": "El email ya está registrado"
+}
+```
+
+## Example Request
+
+```bash cURL
+curl -X POST https://api.pcfix.com/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "nuevo@ejemplo.com",
+    "nombre": "María",
+    "apellido": "García",
+    "telefono": "+1234567890",
+    "password": "miPassword123"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.pcfix.com/api/auth/register', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    email: 'nuevo@ejemplo.com',
+    nombre: 'María',
+    apellido: 'García',
+    telefono: '+1234567890',
+    password: 'miPassword123'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+  'https://api.pcfix.com/api/auth/register',
+  json={
+    'email': 'nuevo@ejemplo.com',
+    'nombre': 'María',
+    'apellido': 'García',
+    'telefono': '+1234567890',
+    'password': 'miPassword123'
+  }
+)
+
+data = response.json()
+print(data)
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 456,
+      "email": "nuevo@ejemplo.com",
+      "nombre": "María",
+      "apellido": "García",
+      "telefono": "+1234567890",
+      "role": "USER"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+## Notes
+
+- Upon successful registration, a customer profile is automatically created and linked to the user
+- A welcome email is sent asynchronously to the provided email address
+- The JWT token is valid for 7 days from the time of issuance
+- Password is securely hashed using bcrypt before storage
+- The `telefono` field is optional and can be omitted from the request

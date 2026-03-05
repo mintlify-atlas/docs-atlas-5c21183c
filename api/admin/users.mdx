@@ -1,0 +1,173 @@
+---
+title: 'Users'
+description: 'User profile management endpoints'
+---
+
+## Get User Profile
+
+<RequestExample>
+```http
+GET /api/users/:id
+```
+</RequestExample>
+
+Retrieves a user's profile information by their ID.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the user
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  User profile data
+  
+  <ResponseField name="id" type="number">
+    User ID
+  </ResponseField>
+  
+  <ResponseField name="email" type="string">
+    User's email address
+  </ResponseField>
+  
+  <ResponseField name="nombre" type="string">
+    User's first name
+  </ResponseField>
+  
+  <ResponseField name="apellido" type="string">
+    User's last name
+  </ResponseField>
+  
+  <ResponseField name="telefono" type="string" nullable>
+    User's phone number (optional)
+  </ResponseField>
+  
+  <ResponseField name="rol" type="string">
+    User's role (e.g., "USER", "ADMIN")
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request failed
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "email": "[email protected]",
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "telefono": "+54 11 1234-5678",
+    "rol": "USER"
+  }
+}
+```
+</ResponseExample>
+
+### Error Responses
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "Usuario no encontrado"
+}
+```
+</ResponseExample>
+
+---
+
+## Update User Profile
+
+<RequestExample>
+```http
+PUT /api/users/:id
+```
+</RequestExample>
+
+Updates a user's profile information.
+
+### Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the user to update
+</ParamField>
+
+### Request Body
+
+<ParamField body="nombre" type="string" required>
+  User's first name (minimum 2 characters)
+</ParamField>
+
+<ParamField body="apellido" type="string" required>
+  User's last name (minimum 2 characters)
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  User's phone number (optional)
+</ParamField>
+
+<RequestExample>
+```json
+{
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "telefono": "+54 11 1234-5678"
+}
+```
+</RequestExample>
+
+### Response
+
+<ResponseField name="success" type="boolean" required>
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Updated user profile data
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request failed
+</ResponseField>
+
+<ResponseExample>
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "email": "[email protected]",
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "telefono": "+54 11 1234-5678",
+    "rol": "USER"
+  },
+  "message": "Perfil actualizado correctamente"
+}
+```
+</ResponseExample>
+
+### Validation Errors
+
+<ResponseExample>
+```json
+{
+  "success": false,
+  "error": "El nombre es muy corto, El apellido es muy corto"
+}
+```
+</ResponseExample>

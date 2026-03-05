@@ -1,0 +1,463 @@
+---
+title: "Docker Deployment"
+description: "Deploy PC Fix using Docker Compose for development and production"
+---
+
+PC Fix includes a complete Docker Compose configuration for running the entire stack (PostgreSQL, API, and Web) in containers. This guide covers Docker-based deployment for both local development and production environments.
+
+## Overview
+
+The Docker setup provides three services:
+
+- **postgres**: PostgreSQL 15 Alpine database
+- **api**: Express backend (Node.js)
+- **web**: Astro frontend with React islands
+
+<Note>
+All services are connected via Docker's internal network, enabling seamless communication without exposing unnecessary ports.
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Docker">
+    Install Docker Desktop or Docker Engine:
+    - [Docker Desktop](https://www.docker.com/products/docker-desktop) (Windows/Mac/Linux)
+    - [Docker Engine](https://docs.docker.com/engine/install/) (Linux servers)
+  </Step>
+  <Step title="Install Docker Compose">
+    Docker Compose is included in Docker Desktop. For Linux:
+    ```bash
+    sudo apt-get install docker-compose-plugin
+    ```
+  </Step>
+  <Step title="Verify Installation">
+    ```bash
+    docker --version
+    docker compose version
+    ```
+  </Step>
+</Steps>
+
+## Docker Compose Configuration
+
+The `docker-compose.yml` file defines the complete stack:
+
+```yaml docker-compose.yml
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: pcfix-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: pcfix_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Backend API
+  api:
+    build:
+      context: ./packages/api
+      target: dev
+    container_name: pcfix-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://admin:password123@postgres:5432/pcfix_db?schema=public"
+      PORT: 3001
+      JWT_SECRET: "your-jwt-secret"
+      FRONTEND_URL: "http://localhost:4321"
+    volumes:
+      - ./packages/api:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+
+  # Frontend Web
+  web:
+    build:
+      context: ./packages/web
+      target: dev
+    container_name: pcfix-web
+    ports:
+      - "4321:4321"
+    environment:
+      PUBLIC_API_URL: "http://localhost:3001/api"
+      SSR_API_URL: "http://api:3001/api"
+    volumes:
+      - ./packages/web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+```
+
+## Development Deployment
+
+### Initial Setup
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/martin-ratti/PCFIX-Baru.git
+    cd PCFIX-Baru
+    ```
+  </Step>
+  <Step title="Configure Environment Variables">
+    Create `.env` files for both packages (see [Environment Setup](/guides/environment-setup)):
+    
+    ```bash
+    # API environment
+    cp packages/api/.env.example packages/api/.env
+    
+    # Web environment
+    cp packages/web/.env.example packages/web/.env
+    ```
+    
+    Edit both files with your actual credentials.
+  </Step>
+  <Step title="Build and Start Containers">
+    ```bash
+    docker-compose up --build
+    ```
+    
+    This will:
+    - Build Docker images for API and Web
+    - Start PostgreSQL container
+    - Run Prisma migrations
+    - Start API on port 3001
+    - Start Web on port 4321
+  </Step>
+</Steps>
+
+### Access Services
+
+Once running, access:
+
+- **Frontend**: http://localhost:4321
+- **API**: http://localhost:3001
+- **API Health Check**: http://localhost:3001/health
+- **PostgreSQL**: `localhost:5432` (use any DB client)
+
+<Tip>
+Use Prisma Studio to explore the database:
+```bash
+docker exec -it pcfix-api npx prisma studio
+```
+Access at http://localhost:5555
+</Tip>
+
+## Docker Commands Reference
+
+### Basic Operations
+
+<CodeGroup>
+
+```bash Start Services
+# Start all services in detached mode
+docker-compose up -d
+
+# Start and rebuild images
+docker-compose up --build
+
+# Start specific service
+docker-compose up web
+```
+
+```bash Stop Services
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (deletes database data)
+docker-compose down -v
+
+# Stop specific service
+docker-compose stop api
+```
+
+```bash View Logs
+# View all logs
+docker-compose logs
+
+# Follow logs in real-time
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f api
+```
+
+```bash Restart Services
+# Restart all services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart api
+```
+
+</CodeGroup>
+
+### Container Management
+
+```bash
+# List running containers
+docker-compose ps
+
+# Execute command in container
+docker exec -it pcfix-api npm run db:studio
+
+# Access container shell
+docker exec -it pcfix-api sh
+
+# View container resource usage
+docker stats
+```
+
+### Database Operations
+
+```bash
+# Run migrations
+docker exec -it pcfix-api npx prisma migrate deploy
+
+# Generate Prisma Client
+docker exec -it pcfix-api npx prisma generate
+
+# Seed database
+docker exec -it pcfix-api npx prisma db seed
+
+# Reset database (WARNING: deletes all data)
+docker exec -it pcfix-api npx prisma migrate reset
+```
+
+## Production Deployment
+
+### Docker Production Build
+
+For production, create a `docker-compose.prod.yml`:
+
+```yaml docker-compose.prod.yml
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pcfix-postgres-prod
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    restart: always
+
+  api:
+    build:
+      context: ./packages/api
+      target: production
+    container_name: pcfix-api-prod
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3002
+    ports:
+      - "3002:3002"
+    depends_on:
+      - postgres
+    restart: always
+
+  web:
+    build:
+      context: ./packages/web
+      target: production
+    container_name: pcfix-web-prod
+    environment:
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+      SSR_API_URL: http://api:3002/api
+    ports:
+      - "4321:4321"
+    depends_on:
+      - api
+    restart: always
+
+volumes:
+  postgres_prod_data:
+```
+
+### Deploy to Production
+
+<Steps>
+  <Step title="Set Production Environment">
+    Create `.env.production` with production credentials:
+    ```bash
+    DB_USER=prod_admin
+    DB_PASSWORD=secure_password_here
+    DB_NAME=pcfix_production
+    DATABASE_URL=postgresql://prod_admin:secure_password_here@postgres:5432/pcfix_production
+    JWT_SECRET=production-jwt-secret-change-this
+    PUBLIC_API_URL=https://api.yoursite.com/api
+    ```
+  </Step>
+  <Step title="Build Production Images">
+    ```bash
+    docker-compose -f docker-compose.prod.yml build
+    ```
+  </Step>
+  <Step title="Start Production Stack">
+    ```bash
+    docker-compose -f docker-compose.prod.yml up -d
+    ```
+  </Step>
+  <Step title="Run Migrations">
+    ```bash
+    docker exec -it pcfix-api-prod npx prisma migrate deploy
+    ```
+  </Step>
+</Steps>
+
+### Health Monitoring
+
+Add health checks to `docker-compose.prod.yml`:
+
+```yaml
+api:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
+
+web:
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:4321"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+```
+
+## Alternative Deployment Options
+
+<Tabs>
+  <Tab title="Vercel (Frontend)">
+    Deploy the web package to Vercel:
+    
+    1. Install Vercel CLI:
+    ```bash
+    npm i -g vercel
+    ```
+    
+    2. Deploy from `packages/web`:
+    ```bash
+    cd packages/web
+    vercel
+    ```
+    
+    3. Set environment variables in Vercel dashboard:
+    - `PUBLIC_API_URL`
+    - `PUBLIC_GOOGLE_CLIENT_ID`
+    - `PUBLIC_SENTRY_DSN`
+    
+    <Note>
+    PC Fix already includes `@astrojs/vercel` adapter in `astro.config.mjs`
+    </Note>
+  </Tab>
+  
+  <Tab title="Railway (Backend)">
+    Deploy the API to Railway:
+    
+    1. Sign up at [railway.app](https://railway.app)
+    2. Create new project from GitHub repo
+    3. Add PostgreSQL service
+    4. Configure environment variables
+    5. Deploy
+    
+    Railway will automatically:
+    - Detect Node.js project
+    - Install dependencies
+    - Run Prisma migrations
+    - Start the server
+  </Tab>
+  
+  <Tab title="Docker + VPS">
+    Deploy to a VPS (DigitalOcean, AWS EC2, etc.):
+    
+    1. SSH into your server
+    2. Install Docker and Docker Compose
+    3. Clone repository
+    4. Configure production environment
+    5. Use `docker-compose.prod.yml`
+    6. Set up reverse proxy (Nginx/Caddy)
+    7. Configure SSL certificates (Let's Encrypt)
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If ports 3001, 4321, or 5432 are in use:
+    ```bash
+    # Find process using port
+    lsof -i :3001
+    
+    # Kill process
+    kill -9 <PID>
+    
+    # Or change ports in docker-compose.yml
+    ```
+  </Accordion>
+  
+  <Accordion title="Container won't start">
+    Check container logs:
+    ```bash
+    docker-compose logs api
+    docker-compose logs web
+    docker-compose logs postgres
+    ```
+    
+    Common issues:
+    - Missing environment variables
+    - Database connection failed
+    - Port conflicts
+  </Accordion>
+  
+  <Accordion title="Database connection refused">
+    Ensure:
+    - PostgreSQL container is running: `docker ps`
+    - Use host `postgres` in DATABASE_URL (not `localhost`)
+    - Wait for postgres to be ready before API starts
+  </Accordion>
+  
+  <Accordion title="Changes not reflecting">
+    Hot reload requires volumes to be mounted correctly:
+    ```bash
+    # Rebuild without cache
+    docker-compose build --no-cache
+    
+    # Restart services
+    docker-compose restart
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Migrations" icon="database" href="/guides/database-migrations">
+    Learn how to manage schema changes
+  </Card>
+  <Card title="Testing" icon="flask" href="/guides/testing">
+    Run tests in Docker containers
+  </Card>
+  <Card title="Environment Setup" icon="gear" href="/guides/environment-setup">
+    Configure environment variables
+  </Card>
+  <Card title="Architecture" icon="building" href="/architecture/overview">
+    Understand the system architecture
+  </Card>
+</CardGroup>

@@ -1,0 +1,334 @@
+---
+title: 'Authentication System'
+description: 'Secure user authentication with JWT, Google OAuth, and password management'
+icon: 'shield-check'
+---
+
+## Overview
+
+PC Fix implements a robust authentication system that provides multiple login methods, secure password management, and seamless user session handling. The system uses JWT tokens for stateless authentication and supports both traditional email/password login and Google OAuth integration.
+
+## Authentication Methods
+
+### Email & Password Login
+
+Users can create accounts and log in using their email address and password. Passwords are securely hashed using bcrypt with a salt factor of 10.
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async login(data: any) {
+  const user = await prisma.user.findUnique({ where: { email: data.email } });
+  if (!user || !user.password) {
+    throw new Error('Credenciales inválidas');
+  }
+
+  const isValid = await bcrypt.compare(data.password, user.password);
+  if (!isValid) {
+    throw new Error('Credenciales inválidas');
+  }
+
+  const token = this.generateToken(user);
+  return { user, token };
+}
+```
+
+### Google OAuth Integration
+
+For a frictionless login experience, PC Fix integrates with Google OAuth 2.0. Users can sign in with their Google account, and the system automatically creates a user profile if one doesn't exist.
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async loginWithGoogle(idToken: string) {
+  const ticket = await client.verifyIdToken({
+    idToken,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
+
+  if (!payload?.email) {
+    throw new Error('Token de Google inválido');
+  }
+
+  let user = await prisma.user.findUnique({ where: { email: payload.email } });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: payload.email,
+        nombre: payload.given_name || 'Usuario',
+        apellido: payload.family_name || '',
+        password: '',
+        googleId: payload.sub,
+        role: 'USER',
+      },
+    });
+    await prisma.cliente.create({ data: { userId: user.id } });
+  }
+
+  const token = this.generateToken(user);
+  return { user, token };
+}
+```
+
+<Info>
+The Google OAuth integration automatically creates a customer profile and sends a welcome email to new users.
+</Info>
+
+## JWT Token Management
+
+### Token Generation
+
+JWT tokens are issued with a 7-day expiration period and include user ID, email, and role information.
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+private generateToken(user: any) {
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+```
+
+### Token Storage
+
+On the client side, authentication tokens are managed through Zustand state management:
+
+```typescript packages/web/src/stores/authStore.ts
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+
+export const useAuthStore = create<CartState>()(persist(
+  (set) => ({
+    token: null,
+    user: null,
+    setAuth: (token, user) => set({ token, user }),
+    logout: () => set({ token: null, user: null })
+  }),
+  {
+    name: 'auth-storage',
+    storage: createJSONStorage(() => sessionStorage),
+  }
+));
+```
+
+## Password Reset Flow
+
+### Requesting Password Reset
+
+Users who forget their password can request a reset link. The system generates a secure token that expires in 1 hour.
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async forgotPassword(email: string) {
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    return { message: 'Si el correo existe, se envió el enlace.' };
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 3600000); // 1 hour
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      resetToken: token,
+      resetTokenExpires: expires,
+    },
+  });
+
+  emailService.sendPasswordResetEmail(user.email, token)
+    .catch(e => console.error('Error sending password reset email:', e));
+
+  return { message: 'Correo enviado' };
+}
+```
+
+### Resetting Password
+
+Users click the link in their email and submit a new password. The system verifies the token hasn't expired before updating.
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async resetPassword(token: string, newPassword: string) {
+  const user = await prisma.user.findFirst({
+    where: {
+      resetToken: token,
+      resetTokenExpires: { gt: new Date() },
+    },
+  });
+
+  if (!user) {
+    throw new Error('Token inválido o expirado');
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpires: null,
+    },
+  });
+
+  return { message: 'Contraseña actualizada' };
+}
+```
+
+<Warning>
+Password reset tokens expire after 1 hour for security. Users must complete the reset process within this timeframe.
+</Warning>
+
+## User Registration
+
+New users can register with their personal information. The system automatically:
+- Hashes the password
+- Creates a customer profile
+- Sends a welcome email
+- Returns a JWT token for immediate login
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async register(data: any) {
+  const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
+  if (existingUser) {
+    throw new Error('El usuario ya existe');
+  }
+
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      nombre: data.nombre,
+      apellido: data.apellido,
+      telefono: data.telefono || null,
+      email: data.email,
+      password: hashedPassword,
+      role: 'USER',
+    },
+  });
+
+  await prisma.cliente.create({ data: { userId: user.id } });
+
+  const token = this.generateToken(user);
+
+  emailService.sendWelcomeEmail(user.email, user.nombre)
+    .catch(e => console.error('Error sending welcome email:', e));
+
+  return { user, token };
+}
+```
+
+## Password Management
+
+### Changing Password (Authenticated Users)
+
+Logged-in users can change their password by providing their current password for verification:
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async changePassword(userId: number, currentPass: string, newPass: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !user.password) throw new Error('Usuario no encontrado');
+
+  const isValid = await bcrypt.compare(currentPass, user.password);
+  if (!isValid) throw new Error('La contraseña actual es incorrecta');
+
+  const hashedPassword = await bcrypt.hash(newPass, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashedPassword }
+  });
+
+  return { message: 'Contraseña cambiada exitosamente' };
+}
+```
+
+## Account Deletion
+
+Users can delete their accounts, but only if they don't have active orders. This protects both the business and the customer:
+
+```typescript packages/api/src/modules/auth/auth.service.ts
+async deleteAccount(userId: number) {
+  const activeOrdersCount = await prisma.venta.count({
+    where: {
+      cliente: { userId },
+      estado: {
+        in: ['PENDIENTE_PAGO', 'PENDIENTE_APROBACION', 'APROBADO', 'ENVIADO']
+      }
+    }
+  });
+
+  if (activeOrdersCount > 0) {
+    throw new Error('No puedes eliminar tu cuenta porque tienes pedidos en curso.');
+  }
+
+  await prisma.user.delete({
+    where: { id: userId }
+  });
+
+  return { message: 'Cuenta eliminada correctamente' };
+}
+```
+
+## User Roles
+
+The system supports two user roles defined in the database schema:
+
+```prisma packages/api/prisma/schema.prisma
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  nombre   String
+  apellido String
+  role     Role    @default(USER)
+  // ... other fields
+}
+```
+
+- **USER**: Standard customers with access to shopping and order management
+- **ADMIN**: Administrators with access to the admin dashboard and management features
+
+## Security Features
+
+<CardGroup cols={2}>
+  <Card title="Password Hashing" icon="lock">
+    All passwords are hashed using bcrypt with a salt factor of 10 before storage
+  </Card>
+  <Card title="Token Expiration" icon="clock">
+    JWT tokens expire after 7 days, requiring re-authentication for security
+  </Card>
+  <Card title="OAuth Security" icon="google">
+    Google OAuth tokens are verified server-side against Google's API
+  </Card>
+  <Card title="Reset Token Expiry" icon="key">
+    Password reset tokens expire after 1 hour to prevent abuse
+  </Card>
+</CardGroup>
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/register` | POST | Register a new user |
+| `/api/auth/login` | POST | Login with email/password |
+| `/api/auth/google` | POST | Login with Google OAuth |
+| `/api/auth/forgot-password` | POST | Request password reset |
+| `/api/auth/reset-password` | POST | Reset password with token |
+| `/api/auth/change-password` | PUT | Change password (authenticated) |
+| `/api/auth/delete-account` | DELETE | Delete user account |
+
+## Environment Variables
+
+Required environment variables for authentication:
+
+```bash
+JWT_SECRET=your-secret-key
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+FRONTEND_URL=https://yoursite.com
+```
+
+<Tip>
+In development, JWT_SECRET defaults to 'secret', but you should always set a strong secret in production.
+</Tip>

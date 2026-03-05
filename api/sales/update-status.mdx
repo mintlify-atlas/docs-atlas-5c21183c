@@ -1,0 +1,244 @@
+---
+title: 'Update Sale Status'
+api: 'PUT /api/sales/:id/status'
+description: 'Update the status of a sale order (admin only)'
+---
+
+## Authentication
+
+This endpoint requires authentication with admin privileges.
+
+## Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the sale to update
+</ParamField>
+
+## Request Body
+
+<ParamField body="status" type="string" required>
+  The new status for the sale. Must be one of:
+  - `PENDIENTE_PAGO` - Pending payment
+  - `PENDIENTE_APROBACION` - Pending approval (awaiting payment verification)
+  - `APROBADO` - Approved and ready to be prepared
+  - `ENVIADO` - Shipped/dispatched
+  - `ENTREGADO` - Delivered to customer
+  - `RECHAZADO` - Rejected (payment failed or order cancelled by admin)
+  - `CANCELADO` - Cancelled by customer or admin
+</ParamField>
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the request was successful
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The updated sale object
+  <ResponseField name="id" type="number">
+    Sale ID
+  </ResponseField>
+  <ResponseField name="fecha" type="string">
+    Sale date (ISO 8601 timestamp)
+  </ResponseField>
+  <ResponseField name="montoTotal" type="number">
+    Total amount including shipping
+  </ResponseField>
+  <ResponseField name="estado" type="string">
+    Updated sale status
+  </ResponseField>
+  <ResponseField name="medioPago" type="string">
+    Payment method
+  </ResponseField>
+  <ResponseField name="tipoEntrega" type="string">
+    Delivery type
+  </ResponseField>
+  <ResponseField name="costoEnvio" type="number">
+    Shipping cost
+  </ResponseField>
+  <ResponseField name="clienteId" type="number">
+    Customer ID
+  </ResponseField>
+  <ResponseField name="lineasVenta" type="array">
+    Array of line items
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request failed
+</ResponseField>
+
+## Related Endpoints
+
+### Dispatch Sale
+`PUT /api/sales/:id/dispatch`
+
+Specialized endpoint to mark a sale as dispatched with tracking information.
+
+**Request Body:**
+<ParamField body="trackingCode" type="string" required>
+  Tracking code for the shipment
+</ParamField>
+
+This endpoint automatically updates the status to `ENVIADO` and sets the tracking code.
+
+### Cancel Order
+`PUT /api/sales/:id/cancel`
+
+Allows users to cancel their own order. Updates the status to `CANCELADO` and restores product stock.
+
+**Authentication:** Regular user authentication (users can cancel their own orders)
+
+## Sale Status Workflow
+
+Typical status progression:
+
+1. **PENDIENTE_PAGO** - Initial state after sale creation
+2. **PENDIENTE_APROBACION** - Payment proof uploaded, awaiting verification
+3. **APROBADO** - Payment confirmed, order ready for preparation
+4. **ENVIADO** - Order shipped with tracking code
+5. **ENTREGADO** - Order delivered to customer
+
+Alternative flows:
+- **RECHAZADO** - Payment failed or order rejected
+- **CANCELADO** - Order cancelled by customer or admin
+
+## Example Request
+
+```json
+{
+  "status": "APROBADO"
+}
+```
+
+## Example Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "fecha": "2026-03-05T10:30:00.000Z",
+    "montoTotal": 50000,
+    "estado": "APROBADO",
+    "medioPago": "TRANSFERENCIA",
+    "tipoEntrega": "ENVIO",
+    "costoEnvio": 5000,
+    "clienteId": 42,
+    "direccionEnvio": "Av. Corrientes 1234",
+    "lineasVenta": [
+      {
+        "id": 1,
+        "productoId": 123,
+        "cantidad": 2,
+        "subTotal": 30000
+      },
+      {
+        "id": 2,
+        "productoId": 456,
+        "cantidad": 1,
+        "subTotal": 15000
+      }
+    ]
+  }
+}
+```
+
+## Example Request - Dispatch Sale
+
+```bash
+PUT /api/sales/789/dispatch
+```
+
+```json
+{
+  "trackingCode": "AR123456789"
+}
+```
+
+## Example Response - Dispatch Sale
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "estado": "ENVIADO",
+    "codigoSeguimiento": "AR123456789",
+    "montoTotal": 50000,
+    "fecha": "2026-03-05T10:30:00.000Z"
+  }
+}
+```
+
+## Example Request - Cancel Order
+
+```bash
+PUT /api/sales/789/cancel
+```
+
+## Example Response - Cancel Order
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 789,
+    "estado": "CANCELADO",
+    "montoTotal": 50000,
+    "fecha": "2026-03-05T10:30:00.000Z"
+  }
+}
+```
+
+## Error Responses
+
+### Invalid Status (400)
+```json
+{
+  "success": false,
+  "error": "Invalid status"
+}
+```
+
+### Missing Tracking Code (400) - Dispatch endpoint
+```json
+{
+  "success": false,
+  "error": "Tracking required"
+}
+```
+
+### Unauthorized (401)
+```json
+{
+  "success": false,
+  "error": "Unauthorized"
+}
+```
+
+### Forbidden - Not Admin (403)
+```json
+{
+  "success": false,
+  "error": "Admin access required"
+}
+```
+
+### Sale Not Found (404)
+```json
+{
+  "success": false,
+  "error": "Venta no encontrada"
+}
+```
+
+## Notes
+
+- Only admin users can update sale status via `/api/sales/:id/status`
+- The `/api/sales/:id/dispatch` endpoint is a convenience method for shipping orders
+- The `/api/sales/:id/cancel` endpoint can be used by regular users to cancel their own orders
+- Cancelling an order restores the product stock that was reserved
+- Status changes may trigger email notifications to customers
+- Once a sale is marked as `ENTREGADO`, it should not be changed to other statuses
+- Status transitions should follow the logical workflow to maintain data integrity

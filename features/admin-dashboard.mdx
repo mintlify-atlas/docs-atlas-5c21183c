@@ -1,0 +1,597 @@
+---
+title: 'Admin Dashboard'
+description: 'Comprehensive admin interface with real-time metrics, analytics, and CRUD operations'
+icon: 'gauge-high'
+---
+
+## Overview
+
+The PC Fix admin dashboard provides a powerful command center for managing the entire e-commerce operation. It features real-time business intelligence, interactive charts, automated alerts, and comprehensive CRUD operations for all platform entities.
+
+## Dashboard Intelligence
+
+### Key Performance Indicators
+
+The dashboard displays four critical KPIs that update in real-time:
+
+```typescript packages/api/src/modules/stats/stats.service.ts
+async getSalesIntelligence() {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Current month revenue
+  const currentMonthSales = await prisma.venta.findMany({
+    where: {
+      fecha: { gte: startOfMonth },
+      estado: { in: ['APROBADO', 'ENVIADO', 'ENTREGADO'] }
+    },
+    select: { montoTotal: true }
+  });
+
+  const grossRevenue = currentMonthSales.reduce(
+    (acc, sale) => acc + Number(sale.montoTotal), 
+    0
+  );
+
+  // Low stock products
+  const lowStockProducts = await prisma.producto.count({
+    where: { deletedAt: null, stock: { lte: 5 } }
+  });
+
+  // Pending review orders
+  const pendingReview = await prisma.venta.count({
+    where: { estado: 'PENDIENTE_APROBACION' }
+  });
+
+  // Pending support tickets
+  const pendingSupport = await prisma.consultaTecnica.count({
+    where: { estado: 'PENDIENTE' }
+  });
+
+  return {
+    kpis: {
+      grossRevenue,
+      lowStockProducts,
+      pendingReview,
+      pendingSupport
+    },
+    // ... charts and analytics
+  };
+}
+```
+
+### Dashboard KPI Cards
+
+<CardGroup cols={2}>
+  <Card title="Monthly Revenue" icon="dollar-sign">
+    Gross revenue for current month from approved/shipped/delivered orders. Click to view detailed sales.
+  </Card>
+  <Card title="Low Stock Products" icon="triangle-exclamation">
+    Count of products with ≤5 units in stock. Click to view filtered product list.
+  </Card>
+  <Card title="Pending Review" icon="clipboard-list">
+    Orders awaiting payment verification by admin. Click to view pending orders.
+  </Card>
+  <Card title="Support Tickets" icon="headphones">
+    Unanswered technical support inquiries. Click to view support queue.
+  </Card>
+</CardGroup>
+
+## Interactive Charts
+
+### Sales Trend Chart (30 Days)
+
+Area chart showing daily sales volume and revenue:
+
+```typescript packages/api/src/modules/stats/stats.service.ts
+const thirtyDaysAgo = new Date(now);
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+const salesLast30Days = await prisma.venta.findMany({
+  where: {
+    fecha: { gte: thirtyDaysAgo },
+    estado: { in: ['APROBADO', 'ENVIADO', 'ENTREGADO'] }
+  },
+  select: { fecha: true, montoTotal: true }
+});
+
+const salesTrendMap = new Map<string, { date: string, count: number, total: number }>();
+
+// Initialize all 30 days
+for (let i = 0; i < 30; i++) {
+  const d = new Date(now);
+  d.setDate(d.getDate() - i);
+  const key = d.toISOString().split('T')[0];
+  salesTrendMap.set(key, { date: key, count: 0, total: 0 });
+}
+
+// Aggregate sales by date
+salesLast30Days.forEach(sale => {
+  const key = sale.fecha.toISOString().split('T')[0];
+  if (salesTrendMap.has(key)) {
+    const entry = salesTrendMap.get(key)!;
+    entry.count++;
+    entry.total += Number(sale.montoTotal);
+  }
+});
+
+const salesTrend = Array.from(salesTrendMap.values()).reverse();
+```
+
+### Top Products Chart
+
+Bar chart displaying the 5 best-selling products in the last 30 days:
+
+```typescript packages/api/src/modules/stats/stats.service.ts
+const topProductsRaw = await prisma.lineaVenta.groupBy({
+  by: ['productoId'],
+  where: {
+    venta: {
+      fecha: { gte: thirtyDaysAgo },
+      estado: { in: ['APROBADO', 'ENVIADO', 'ENTREGADO'] }
+    }
+  },
+  _sum: { cantidad: true },
+  orderBy: { _sum: { cantidad: 'desc' } },
+  take: 5
+});
+
+const topProducts = await Promise.all(topProductsRaw.map(async (item) => {
+  const product = await prisma.producto.findUnique({ 
+    where: { id: item.productoId }, 
+    select: { nombre: true } 
+  });
+  return {
+    name: product?.nombre || 'Unknown',
+    quantity: item._sum.cantidad || 0
+  };
+}));
+```
+
+## Dead Stock Management
+
+### Inactive Product Detection
+
+The dashboard identifies products that haven't sold in 90+ days:
+
+```typescript packages/web/src/components/admin/dashboard/DashboardIntelligence.tsx
+<div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+  <div className="p-6 border-b border-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <SkullIcon className="w-5 h-5 text-gray-400" />
+        Stock Inmovilizado
+        <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full">
+          {data.deadStock.length}
+        </span>
+      </h3>
+      <p className="text-sm text-gray-400">Productos sin ventas en +90 días. ¡Muévelos!</p>
+    </div>
+  </div>
+
+  <div className="overflow-x-auto">
+    <table className="w-full text-left border-collapse">
+      <thead>
+        <tr className="bg-gray-50 text-gray-500 text-xs uppercase">
+          <th className="p-4 font-semibold">Producto</th>
+          <th className="p-4 font-semibold text-center">Stock</th>
+          <th className="p-4 font-semibold text-right">Inactividad</th>
+          <th className="p-4 font-semibold text-right">Acción</th>
+        </tr>
+      </thead>
+      <tbody className="text-sm divide-y divide-gray-50">
+        {data.deadStock.slice(0, 10).map((item) => (
+          <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+            <td className="p-4 font-medium text-gray-800">{item.name}</td>
+            <td className="p-4 text-center">
+              <span className="font-bold text-gray-700">{item.stock}</span>
+            </td>
+            <td className="p-4 text-right text-gray-500">{item.daysInactive} días</td>
+            <td className="p-4 text-right">
+              <button
+                onClick={() => setOfferProduct(item)}
+                className="bg-red-50 text-red-600 hover:bg-red-100 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1"
+              >
+                <ZapIcon className="w-3 h-3" /> Oferta Flash
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
+```
+
+### Flash Sale Creation
+
+Admins can instantly create discounts for slow-moving products directly from the dashboard:
+
+```typescript packages/web/src/components/admin/dashboard/DashboardIntelligence.tsx
+const handleDiscountUpdate = async (newPrice: number, originalPrice: number | null) => {
+  if (!offerProduct) return;
+  try {
+    await fetchApi(`/products/${offerProduct.id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify({ 
+        precio: newPrice, 
+        precioOriginal: originalPrice 
+      })
+    });
+    addToast('Oferta Flash aplicada', 'success');
+  } catch (e) {
+    addToast('Error al aplicar oferta', 'error');
+  } finally {
+    setOfferProduct(null);
+  }
+};
+```
+
+## Maintenance Mode
+
+### Site-Wide Control
+
+Admins can toggle maintenance mode to temporarily disable the storefront:
+
+```typescript packages/web/src/components/admin/dashboard/DashboardIntelligence.tsx
+const toggleMaintenance = async () => {
+  const newValue = !maintenanceMode;
+  setMaintenanceMode(newValue);
+  setToggling(true);
+  try {
+    await fetchApi('/config', {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify({ maintenanceMode: newValue })
+    });
+    addToast(
+      newValue ? 'Sitio puesto en Mantenimiento' : 'Sitio Operativo nuevamente', 
+      newValue ? 'info' : 'success'
+    );
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  } catch (e) {
+    setMaintenanceMode(!newValue);
+    addToast('Error al cambiar modo', 'error');
+  } finally {
+    setToggling(false);
+  }
+};
+```
+
+```prisma packages/api/prisma/schema.prisma
+model Configuracion {
+  id              Int     @id @default(autoincrement())
+  maintenanceMode Boolean @default(false)
+  // ... other fields
+}
+```
+
+<Warning>
+Enabling maintenance mode immediately blocks customer access to the store. Use this feature carefully during updates or critical issues.
+</Warning>
+
+## Admin Pages
+
+The admin panel includes dedicated pages for managing different aspects of the platform:
+
+### Available Admin Pages
+
+<CardGroup cols={2}>
+  <Card title="Dashboard" icon="gauge-high" href="/admin">
+    Main intelligence center with metrics and charts
+  </Card>
+  <Card title="Products" icon="box" href="/admin/productos">
+    Product catalog management and inventory
+  </Card>
+  <Card title="Sales" icon="shopping-cart" href="/admin/ventas">
+    Order management and payment verification
+  </Card>
+  <Card title="Categories" icon="folder" href="/admin/categorias">
+    Product category hierarchy management
+  </Card>
+  <Card title="Brands" icon="tag" href="/admin/marcas">
+    Brand management with logo uploads
+  </Card>
+  <Card title="Support" icon="headphones" href="/admin/soporte">
+    Technical support ticket management
+  </Card>
+  <Card title="Configuration" icon="gear" href="/admin/configuracion">
+    System settings and payment configurations
+  </Card>
+  <Card title="POS" icon="cash-register" href="/admin/nueva-venta">
+    Point of Sale for in-store transactions
+  </Card>
+</CardGroup>
+
+## Sales Management
+
+### Order Filtering
+
+Admins can filter orders by various criteria:
+
+```typescript packages/api/src/modules/sales/sales.service.ts
+async findAll(
+  page: number, 
+  limit: number, 
+  userId?: number, 
+  month?: number, 
+  year?: number, 
+  paymentMethod?: string, 
+  date?: string
+) {
+  const where: any = {};
+  if (userId) where.cliente = { userId };
+
+  if (date) {
+    const [y, m, d] = date.split('-').map(Number);
+    const startDate = new Date(y, m - 1, d, 0, 0, 0);
+    const endDate = new Date(y, m - 1, d, 23, 59, 59);
+    where.fecha = { gte: startDate, lte: endDate };
+  } else if (month && year) {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    where.fecha = { gte: startDate, lte: endDate };
+  } else if (year) {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31, 23, 59, 59);
+    where.fecha = { gte: startDate, lte: endDate };
+  }
+  if (paymentMethod) where.medioPago = paymentMethod;
+
+  const [total, sales] = await prisma.$transaction([
+    prisma.venta.count({ where }),
+    prisma.venta.findMany({
+      where,
+      include: { 
+        cliente: { include: { user: true } }, 
+        lineasVenta: { include: { producto: true } } 
+      },
+      orderBy: { fecha: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit
+    })
+  ]);
+  
+  return { 
+    data: sales, 
+    meta: { total, page, lastPage: Math.ceil(total / limit), limit } 
+  };
+}
+```
+
+### Monthly Balance Report
+
+Revenue breakdown by products vs. services:
+
+```typescript packages/api/src/modules/sales/sales.service.ts
+async getMonthlyBalance(year: number) {
+  const startDate = new Date(year, 0, 1);
+  const endDate = new Date(year, 11, 31, 23, 59, 59);
+  
+  const ventas = await prisma.venta.findMany({
+    where: {
+      fecha: { gte: startDate, lte: endDate },
+      estado: { in: ['APROBADO', 'ENVIADO', 'ENTREGADO'] }
+    },
+    include: {
+      lineasVenta: { include: { producto: { include: { categoria: true } } } }
+    },
+    orderBy: { fecha: 'asc' }
+  });
+
+  const balanceMap = new Map<string, any>();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(year, i, 1);
+    const monthName = d.toLocaleString('es-ES', { month: 'short' });
+    balanceMap.set(monthName, { 
+      name: monthName, 
+      products: 0, 
+      services: 0, 
+      total: 0, 
+      monthIndex: i + 1 
+    });
+  }
+
+  ventas.forEach((v: any) => {
+    const monthName = new Date(v.fecha).toLocaleString('es-ES', { month: 'short' });
+    const entry = balanceMap.get(monthName);
+    if (entry) {
+      let saleServices = 0;
+      let saleProducts = 0;
+      v.lineasVenta.forEach((line: any) => {
+        const categoria = line.producto.categoria?.nombre.toLowerCase() || '';
+        if (categoria.includes('servicio') || line.producto.stock > 90000) {
+          saleServices += Number(line.subTotal);
+        } else {
+          saleProducts += Number(line.subTotal);
+        }
+      });
+      saleProducts += Number(v.costoEnvio || 0);
+      entry.services += saleServices;
+      entry.products += saleProducts;
+      entry.total += (saleServices + saleProducts);
+    }
+  });
+  
+  return Array.from(balanceMap.values());
+}
+```
+
+## Point of Sale (POS)
+
+### Manual Sale Creation
+
+Admins can create in-store sales with custom pricing:
+
+```typescript packages/api/src/modules/sales/sales.service.ts
+async createManualSale(data: { 
+  customerEmail: string, 
+  items: SaleItemInput[], 
+  medioPago: string, 
+  estado: string 
+}) {
+  // Find or create user
+  let user = await prisma.user.findUnique({ where: { email: data.customerEmail } });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: data.customerEmail,
+        nombre: 'Cliente',
+        apellido: 'Mostrador',
+        password: '',
+        role: 'USER'
+      }
+    });
+  }
+
+  let client = await prisma.cliente.findUnique({ where: { userId: user.id } });
+  if (!client) client = await prisma.cliente.create({ data: { userId: user.id } });
+
+  // Calculate total with custom prices
+  let total = 0;
+  const saleLines: SaleLineItem[] = [];
+
+  for (const item of data.items) {
+    const product = dbProducts.find((p: any) => p.id === item.id);
+    if (!product) throw new Error(`Producto ${item.id} no encontrado`);
+
+    let price = Number(product.precio);
+    if (item.customPrice !== undefined && item.customPrice !== null) {
+      price = Number(item.customPrice);
+    }
+
+    total += price * item.quantity;
+
+    saleLines.push({
+      productoId: product.id,
+      cantidad: item.quantity,
+      subTotal: price * item.quantity,
+      customPrice: item.customPrice ? Number(item.customPrice) : null,
+      customDescription: item.customDescription || null
+    });
+  }
+
+  return await prisma.$transaction(async (tx: any) => {
+    const sale = await tx.venta.create({
+      data: {
+        clienteId: client!.id,
+        fecha: new Date(),
+        estado: data.estado as any,
+        medioPago: data.medioPago,
+        montoTotal: total,
+        tipoEntrega: 'RETIRO',
+        lineasVenta: { create: saleLines }
+      }
+    });
+
+    // Decrement stock
+    for (const line of saleLines) {
+      const product = dbProducts.find((p: any) => p.id === line.productoId);
+      if (product && product.stock < 90000) {
+        await tx.producto.update({ 
+          where: { id: line.productoId }, 
+          data: { stock: { decrement: line.cantidad } } 
+        });
+      }
+    }
+    return sale;
+  });
+}
+```
+
+## Dashboard Statistics
+
+### Basic Stats Endpoint
+
+Quick overview statistics for the dashboard:
+
+```typescript packages/api/src/modules/stats/stats.service.ts
+async getDashboardStats() {
+  const [
+    totalProducts, 
+    lowStockProducts, 
+    totalUsers, 
+    recentSales, 
+    pendingInquiries
+  ] = await prisma.$transaction([
+    prisma.producto.count({ where: { deletedAt: null } }),
+    prisma.producto.count({ where: { deletedAt: null, stock: { lte: 5 } } }),
+    prisma.user.count(),
+    prisma.venta.count(),
+    prisma.consultaTecnica.count({ where: { estado: 'PENDIENTE' } })
+  ]);
+
+  return {
+    totalProducts,
+    lowStockProducts,
+    totalUsers,
+    recentSales,
+    pendingInquiries
+  };
+}
+```
+
+## Access Control
+
+### Role-Based Authorization
+
+Admin routes are protected by role verification:
+
+```typescript
+enum Role {
+  USER
+  ADMIN
+}
+```
+
+Middleware checks JWT token for `role: 'ADMIN'` before granting access to admin endpoints.
+
+## Real-Time Features
+
+<CardGroup cols={2}>
+  <Card title="Live KPIs" icon="chart-line">
+    Dashboard metrics update on page load with current data
+  </Card>
+  <Card title="Click-Through Actions" icon="mouse-pointer">
+    KPI cards link directly to relevant filtered views
+  </Card>
+  <Card title="Chart Interactions" icon="hand-pointer">
+    Charts are clickable to drill down into specific dates
+  </Card>
+  <Card title="Instant Discounts" icon="zap">
+    Apply flash sales to dead stock products instantly
+  </Card>
+</CardGroup>
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/stats` | GET | Basic dashboard statistics |
+| `/api/stats/intelligence` | GET | Advanced sales intelligence |
+| `/api/sales/balance` | GET | Monthly revenue breakdown |
+| `/api/sales/manual` | POST | Create POS sale |
+| `/api/config` | GET/PUT | System configuration |
+
+<Tip>
+Use the dashboard's clickable KPIs to quickly navigate to the specific area that needs attention. This saves time when managing the platform.
+</Tip>
+
+## Performance Optimizations
+
+- **Batch Queries**: Dashboard statistics use `$transaction` to fetch multiple metrics in parallel
+- **Indexed Queries**: Database indexes on `estado`, `fecha`, and `deletedAt` speed up analytics
+- **Lazy Loading**: Charts load data asynchronously after initial page render
+- **Caching**: Stats endpoint can be cached for faster subsequent loads
+
+The admin dashboard provides everything needed to run a successful e-commerce operation from a single, intuitive interface.

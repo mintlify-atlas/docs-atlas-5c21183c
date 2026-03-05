@@ -1,0 +1,377 @@
+---
+title: 'Shopping Cart'
+description: 'Persistent shopping cart with Zustand state management and abandoned cart recovery'
+icon: 'cart-shopping'
+---
+
+## Overview
+
+PC Fix features a sophisticated shopping cart system that provides a seamless user experience with client-side state management using Zustand, server-side persistence, and automated abandoned cart recovery to maximize conversion rates.
+
+## Client-Side Cart Management
+
+### Zustand State Store
+
+The shopping cart uses Zustand for reactive state management with session storage persistence:
+
+```typescript packages/web/src/stores/cartStore.ts
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { Product } from '../data/mock-data';
+
+export interface CartItem extends Product {
+  quantity: number;
+}
+
+interface CartState {
+  items: CartItem[];
+  addItem: (product: Product) => void;
+  removeItem: (productId: string) => void;
+  increaseQuantity: (productId: string) => void;
+  decreaseQuantity: (productId: string) => void;
+  clearCart: () => void;
+}
+
+export const useCartStore = create<CartState>()(persist(
+  (set) => ({
+    items: [],
+    addItem: (product) => set((state) => {
+      const existingItem = state.items.find((item) => item.id === product.id);
+      if (existingItem) {
+        const updatedItems = state.items.map((item) =>
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+        return { items: updatedItems };
+      } else {
+        return { items: [...state.items, { ...product, quantity: 1 }] };
+      }
+    }),
+    removeItem: (productId) => set((state) => ({
+      items: state.items.filter((item) => item.id !== productId),
+    })),
+    increaseQuantity: (productId) => set((state) => ({
+      items: state.items.map((item) =>
+        item.id === productId ? { ...item, quantity: Math.min(item.stock, item.quantity + 1) } : item
+      ),
+    })),
+    decreaseQuantity: (productId) => set((state) => ({
+      items: state.items.map((item) =>
+        item.id === productId ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
+      ),
+    })),
+    clearCart: () => set({ items: [] }),
+  }),
+  {
+    name: 'cart-session-storage',
+    storage: createJSONStorage(() => sessionStorage),
+  }
+));
+```
+
+### Cart Operations
+
+<CardGroup cols={2}>
+  <Card title="Add to Cart" icon="plus">
+    Automatically increments quantity if item already exists in cart
+  </Card>
+  <Card title="Stock Validation" icon="box">
+    Prevents adding more items than available in stock
+  </Card>
+  <Card title="Quantity Controls" icon="slider">
+    Increase/decrease quantity with minimum of 1 and maximum of stock level
+  </Card>
+  <Card title="Remove Items" icon="trash">
+    Instantly remove items from cart with one click
+  </Card>
+</CardGroup>
+
+## Server-Side Cart Persistence
+
+### Database Schema
+
+Carts are persisted in the database with support for abandoned cart tracking:
+
+```prisma packages/api/prisma/schema.prisma
+model Cart {
+  id                 Int        @id @default(autoincrement())
+  userId             Int        @unique
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items              CartItem[]
+  abandonedEmailSent Boolean    @default(false)
+  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime   @default(now())
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  cartId    Int
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id])
+  quantity  Int
+  
+  @@index([cartId])
+  @@index([productoId])
+}
+```
+
+### Cart Synchronization
+
+When users log in or update their cart, the client syncs with the server to ensure data consistency:
+
+```typescript packages/api/src/modules/cart/cart.service.ts
+export class CartService {
+  async syncCart(userId: number, items: SyncCartItemDto[]) {
+    // Upsert cart (create if doesn't exist)
+    const cart = await (prisma as any).cart.upsert({
+      where: { userId },
+      create: { userId },
+      update: { abandonedEmailSent: false },
+    });
+
+    // Validate products exist and aren't deleted
+    let validItems: SyncCartItemDto[] = [];
+    if (items.length > 0) {
+      const productIds = items.map(i => Number(i.id)).filter(id => !isNaN(id));
+
+      if (productIds.length > 0) {
+        const existingProducts = await prisma.producto.findMany({
+          where: { id: { in: productIds }, deletedAt: null },
+          select: { id: true }
+        });
+
+        const existingIds = new Set(existingProducts.map(p => p.id));
+        validItems = items.filter(i => existingIds.has(Number(i.id)));
+      }
+    }
+
+    // Replace all cart items atomically
+    return await (prisma as any).$transaction(async (tx: any) => {
+      await tx.cartItem.deleteMany({
+        where: { cartId: cart.id }
+      });
+
+      if (validItems.length > 0) {
+        await tx.cartItem.createMany({
+          data: validItems.map(item => ({
+            cartId: cart.id,
+            productoId: Number(item.id),
+            quantity: item.quantity
+          }))
+        });
+      }
+
+      return tx.cart.findUnique({
+        where: { id: cart.id },
+        include: { items: { include: { producto: true } } }
+      });
+    });
+  }
+
+  async getCart(userId: number) {
+    return await (prisma as any).cart.findUnique({
+      where: { userId },
+      include: { items: { include: { producto: true } } }
+    });
+  }
+}
+```
+
+<Info>
+Cart synchronization uses database transactions to ensure data consistency. All cart items are replaced atomically during sync.
+</Info>
+
+## Abandoned Cart Recovery
+
+### Automated Email Notifications
+
+PC Fix automatically detects abandoned carts and sends recovery emails to encourage customers to complete their purchase:
+
+```typescript packages/api/src/shared/services/cron.service.ts
+private async checkAbandonedCarts() {
+  try {
+    // Find carts abandoned between 30 minutes and 24 hours ago
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const carts = await (prisma as any).cart.findMany({
+      where: {
+        updatedAt: {
+          lt: thirtyMinutesAgo,
+          gt: twentyFourHoursAgo
+        },
+        abandonedEmailSent: false,
+        items: { some: {} }, // Has at least one item
+        userId: { not: undefined } 
+      },
+      include: {
+        user: true,
+        items: { include: { producto: true } }
+      }
+    });
+
+    for (const cart of carts) {
+      if (!cart.user?.email) continue;
+
+      const products = cart.items.map((i: any) => i.producto);
+      const sent = await emailService.sendAbandonedCartEmail(
+        cart.user.email, 
+        cart.user.nombre, 
+        products
+      );
+
+      if (sent) {
+        await (prisma as any).cart.update({
+          where: { id: cart.id },
+          data: { abandonedEmailSent: true }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error en Cron de Carritos Abandonados:', error);
+  }
+}
+```
+
+### Recovery Timeline
+
+<Steps>
+  <Step title="User adds items to cart">
+    Items are saved both in sessionStorage and synced to the database if user is logged in
+  </Step>
+  <Step title="User leaves without purchasing">
+    Cart remains active in the database with timestamp tracking
+  </Step>
+  <Step title="30 minutes pass">
+    System identifies cart as potentially abandoned
+  </Step>
+  <Step title="Email sent">
+    If cart hasn't been modified in 30 minutes (but less than 24 hours), recovery email is sent
+  </Step>
+  <Step title="Flag updated">
+    Cart is marked with `abandonedEmailSent: true` to prevent duplicate emails
+  </Step>
+</Steps>
+
+### Cron Schedule
+
+The abandoned cart check runs every 30 minutes:
+
+```typescript packages/api/src/shared/services/cron.service.ts
+start() {
+  // Check for abandoned carts every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    await this.checkAbandonedCarts();
+  });
+}
+```
+
+<Warning>
+Abandoned cart emails are only sent once per cart to avoid spam. The `abandonedEmailSent` flag is reset when the cart is updated.
+</Warning>
+
+## Cart Validation
+
+### Product Validation
+
+The system validates that:
+- Products exist and haven't been deleted
+- Products have sufficient stock
+- Prices are current from the database
+
+### Stock Management
+
+Quantity increases are capped at available stock:
+
+```typescript
+increaseQuantity: (productId) => set((state) => ({
+  items: state.items.map((item) =>
+    item.id === productId 
+      ? { ...item, quantity: Math.min(item.stock, item.quantity + 1) } 
+      : item
+  ),
+}))
+```
+
+## Cart Persistence Strategy
+
+<Tabs>
+  <Tab title="Guest Users">
+    - Cart stored only in browser sessionStorage
+    - Lost when browser session ends
+    - Synced to database upon login
+  </Tab>
+  <Tab title="Logged-In Users">
+    - Cart stored in both sessionStorage and database
+    - Persists across devices and sessions
+    - Synced automatically on cart updates
+    - Eligible for abandoned cart recovery
+  </Tab>
+</Tabs>
+
+## Cart-to-Order Flow
+
+When users proceed to checkout:
+
+1. **Cart items are retrieved** from the store
+2. **Stock is validated** against current inventory
+3. **Prices are recalculated** from the database
+4. **Order is created** with a transaction
+5. **Cart is cleared** after successful order
+6. **Stock is decremented** atomically
+
+```typescript packages/api/src/modules/sales/sales.service.ts
+return await prisma.$transaction(async (tx: any) => {
+  const venta = await tx.venta.create({
+    data: {
+      cliente: { connect: { id: cliente!.id } },
+      montoTotal: subtotalReal + costoEnvio,
+      costoEnvio, tipoEntrega, medioPago,
+      estado: VentaEstado.PENDIENTE_PAGO,
+      lineasVenta: { create: lineasParaCrear },
+      // ... shipping address
+    },
+    include: { lineasVenta: true }
+  });
+
+  // Decrement stock for each product
+  for (const linea of lineasParaCrear) {
+    const prod = dbProducts.find((p: any) => p.id === linea.productoId);
+    if (prod && prod.stock < 90000) {
+      await tx.producto.update({ 
+        where: { id: linea.productoId }, 
+        data: { stock: { decrement: linea.cantidad } } 
+      });
+    }
+  }
+  return venta;
+});
+```
+
+## Performance Optimizations
+
+<CardGroup cols={2}>
+  <Card title="Session Storage" icon="bolt">
+    Cart state stored in sessionStorage for instant access without API calls
+  </Card>
+  <Card title="Batch Sync" icon="arrows-rotate">
+    Cart synced to server in single operation, not per-item
+  </Card>
+  <Card title="Database Indexes" icon="database">
+    Indexes on cartId and productoId for fast lookups
+  </Card>
+  <Card title="Transaction Safety" icon="shield">
+    Cart operations use database transactions for consistency
+  </Card>
+</CardGroup>
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/cart/sync` | POST | Sync cart items with server |
+| `/api/cart` | GET | Get current cart for logged-in user |
+
+<Tip>
+The cart automatically syncs when users log in, ensuring their cart follows them across devices.
+</Tip>

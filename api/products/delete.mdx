@@ -1,0 +1,100 @@
+---
+title: "Delete Product"
+api: "DELETE /api/products/:id"
+description: "Delete a product from the catalog"
+---
+
+## Endpoint
+
+```
+DELETE /api/products/:id
+```
+
+## Authentication
+
+**Admin access required.** Only users with the `ADMIN` role can delete products.
+
+## Path Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the product to delete
+</ParamField>
+
+## Request Headers
+
+```
+Authorization: Bearer <access_token>
+```
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates if the product was deleted successfully
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X DELETE "https://api.pcfix.com/api/products/42" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+## Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Error Responses
+
+### Invalid Product ID
+
+```json
+{
+  "success": false,
+  "error": "Product not found"
+}
+```
+
+### Unauthorized
+
+```json
+{
+  "success": false,
+  "error": "Unauthorized - Admin access required"
+}
+```
+
+### Product Has Dependencies
+
+```json
+{
+  "success": false,
+  "error": "Cannot delete product with existing orders or cart items"
+}
+```
+
+### Server Error
+
+```json
+{
+  "success": false,
+  "error": "Error message description"
+}
+```
+
+## Notes
+
+- This operation implements **soft delete** - the product is marked with a `deletedAt` timestamp rather than being permanently removed
+- Soft-deleted products are excluded from product listings by default
+- Products that are referenced in existing orders cannot be permanently deleted to maintain data integrity
+- Consider setting stock to 0 and removing from featured status before deletion
+- Related cart items and favorites may be affected by product deletion
+
+## Related Endpoints
+
+- [List Products](/api/products/list) - View all products
+- [Create Product](/api/products/create) - Add a new product
+- [Update Product](/api/products/update) - Modify product details

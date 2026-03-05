@@ -1,80 +1,355 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get PC Fix running locally in under 5 minutes using Docker Compose
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+Get PC Fix up and running on your local machine in under 5 minutes using Docker Compose. This guide will have you running the complete stack - frontend, backend, and database.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This quickstart uses Docker Compose to orchestrate all services. If you prefer manual setup or need to customize your installation, see the [Installation Guide](/installation).
 </Note>
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js 20+**: [Download here](https://nodejs.org/)
+- **Docker Desktop**: [Download here](https://www.docker.com/products/docker-desktop/)
+- **Git**: [Download here](https://git-scm.com/)
+
+<Warning>
+Docker Desktop must be running before executing the docker-compose commands.
+</Warning>
+
+## Step-by-Step Setup
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the PC Fix repository to your local machine:
+
+    ```bash
+    git clone https://github.com/martin-ratti/PCFIX-Baru.git
+    cd PCFIX-Baru
+    ```
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    PC Fix requires environment variables for the API and Web packages. Create the following files:
+
+    ### API Environment (`packages/api/.env`)
+
+    Create `packages/api/.env` with these variables:
+
+    ```bash
+    # Database
+    DATABASE_URL="postgresql://admin:password123@postgres:5432/pcfix_db?schema=public"
+
+    # Server
+    PORT=3001
+    NODE_ENV=development
+
+    # Authentication
+    JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+    JWT_REFRESH_SECRET="your-super-secret-refresh-key-change-in-production"
+    JWT_EXPIRES_IN="15m"
+    JWT_REFRESH_EXPIRES_IN="7d"
+
+    # CORS
+    CORS_ORIGIN="http://localhost:4321"
+
+    # Optional: External Services (for full functionality)
+    # CLOUDINARY_CLOUD_NAME="your-cloudinary-name"
+    # CLOUDINARY_API_KEY="your-api-key"
+    # CLOUDINARY_API_SECRET="your-api-secret"
+    # MERCADOPAGO_ACCESS_TOKEN="your-mercadopago-token"
+    # GOOGLE_CLIENT_ID="your-google-client-id"
+    # GOOGLE_CLIENT_SECRET="your-google-client-secret"
+    # RESEND_API_KEY="your-resend-api-key"
+    # SENTRY_DSN="your-sentry-dsn"
+    ```
+
+    ### Web Environment (`packages/web/.env`)
+
+    Create `packages/web/.env` with these variables:
+
+    ```bash
+    # API URLs
+    PUBLIC_API_URL="http://localhost:3001/api"
+    SSR_API_URL="http://api:3001/api"
+
+    # Google OAuth (optional)
+    # PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
+
+    # Sentry (optional)
+    # PUBLIC_SENTRY_DSN="your-sentry-dsn"
+    ```
+
+    <Note>
+    The database URL uses `postgres` as the hostname because Docker Compose creates an internal network where services reference each other by service name.
+    </Note>
+  </Step>
+
+  <Step title="Start Docker Compose">
+    Launch all services with a single command:
+
+    ```bash
+    docker-compose up --build
+    ```
+
+    This command will:
+    - Build the API and Web Docker images
+    - Start a PostgreSQL 15 database container
+    - Run Prisma migrations to set up the database schema
+    - Start the Express API server on port 3001
+    - Start the Astro development server on port 4321
+
+    <Warning>
+    The first build may take 5-10 minutes as it downloads base images and installs dependencies.
+    </Warning>
+  </Step>
+
+  <Step title="Verify Services are Running">
+    Once Docker Compose finishes starting, verify all services are accessible:
+
+    - **Frontend**: [http://localhost:4321](http://localhost:4321)
+    - **API**: [http://localhost:3001/api/health](http://localhost:3001/api/health)
+    - **Prisma Studio** (optional): Run `docker exec -it pcfix-api npx prisma studio` to access the database GUI at [http://localhost:5555](http://localhost:5555)
+
+    You should see the PC Fix homepage at `localhost:4321` and a JSON health response from the API.
+  </Step>
+
+  <Step title="Seed the Database (Optional)">
+    To populate the database with sample products and data:
+
+    ```bash
+    docker exec -it pcfix-api npm run db:seed
+    ```
+
+    This will create:
+    - Sample product categories and brands
+    - Demo products with images
+    - Test user accounts
+    - Sample orders and transactions
+  </Step>
+</Steps>
+
+## What's Running?
+
+Your Docker Compose setup includes three services:
+
+<CardGroup cols={3}>
+  <Card title="PostgreSQL Database" icon="database">
+    **Container**: `pcfix-postgres`
+    
+    **Port**: 5432
+    
+    **Credentials**:
+    - User: `admin`
+    - Password: `password123`
+    - Database: `pcfix_db`
+    
+    Persistent volume: `postgres_data`
+  </Card>
+
+  <Card title="Express API" icon="server">
+    **Container**: `pcfix-api`
+    
+    **Port**: 3001
+    
+    **Features**:
+    - Hot reload with nodemon
+    - Auto-runs migrations on start
+    - Volume-mounted source code
+  </Card>
+
+  <Card title="Astro Web Frontend" icon="browser">
+    **Container**: `pcfix-web`
+    
+    **Port**: 4321
+    
+    **Features**:
+    - Hot reload on file changes
+    - SSR with React islands
+    - Volume-mounted source code
+  </Card>
+</CardGroup>
+
+## Common Docker Commands
+
+```bash
+# View logs from all services
+docker-compose logs -f
+
+# View logs from a specific service
+docker-compose logs -f api
+docker-compose logs -f web
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (clears database)
+docker-compose down -v
+
+# Restart a specific service
+docker-compose restart api
+
+# Execute commands in a running container
+docker exec -it pcfix-api npm run db:studio
+
+# Rebuild after code changes
+docker-compose up --build
+```
+
+## Accessing the Admin Dashboard
+
+<Steps>
+  <Step title="Create an Admin User">
+    Connect to the API container and create an admin user:
+
+    ```bash
+    docker exec -it pcfix-api npx prisma studio
+    ```
+
+    Navigate to the `User` model and create a user with `role: ADMIN`.
+  </Step>
+
+  <Step title="Login to Admin Panel">
+    Visit [http://localhost:4321/admin](http://localhost:4321/admin) and login with your admin credentials.
+  </Step>
+</Steps>
+
+## Development Workflow
+
+With Docker Compose running, you can edit files locally and see changes immediately:
+
+1. **Frontend changes**: Edit files in `packages/web/src/` - Astro will hot reload
+2. **Backend changes**: Edit files in `packages/api/src/` - Nodemon will restart the server
+3. **Database schema changes**: Edit `packages/api/prisma/schema.prisma` then run:
+
+```bash
+docker exec -it pcfix-api npx prisma migrate dev --name your_migration_name
+```
+
+## Environment Variables Explained
+
+<AccordionGroup>
+  <Accordion title="Database Connection">
+    ```bash
+    DATABASE_URL="postgresql://admin:password123@postgres:5432/pcfix_db?schema=public"
+    ```
+    
+    - Uses `postgres` hostname (Docker service name)
+    - Default credentials match docker-compose.yml
+    - `schema=public` specifies Prisma schema
+  </Accordion>
+
+  <Accordion title="JWT Configuration">
+    ```bash
+    JWT_SECRET="your-secret-key"
+    JWT_REFRESH_SECRET="your-refresh-secret"
+    JWT_EXPIRES_IN="15m"
+    JWT_REFRESH_EXPIRES_IN="7d"
+    ```
+    
+    - Access tokens expire in 15 minutes
+    - Refresh tokens last 7 days
+    - Change secrets in production!
+  </Accordion>
+
+  <Accordion title="API URLs (Web Package)">
+    ```bash
+    PUBLIC_API_URL="http://localhost:3001/api"  # Client-side
+    SSR_API_URL="http://api:3001/api"          # Server-side (SSR)
+    ```
+    
+    - `PUBLIC_API_URL`: Used by client-side React components
+    - `SSR_API_URL`: Used by Astro SSR pages (uses Docker network)
+  </Accordion>
+
+  <Accordion title="Optional External Services">
+    For full functionality, configure these optional services:
+    
+    - **Cloudinary**: Image upload and CDN
+    - **MercadoPago**: Payment processing
+    - **Google OAuth**: Social login
+    - **Resend**: Transactional emails
+    - **Sentry**: Error monitoring
+    
+    The app will work without these, but some features will be disabled.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    If you see errors about ports 3001, 4321, or 5432 being in use:
+
+    ```bash
+    # Find what's using the port
+    lsof -i :3001
+    
+    # Kill the process or change ports in docker-compose.yml
+    ```
+  </Accordion>
+
+  <Accordion title="Database connection errors">
+    Ensure PostgreSQL container is healthy:
+
+    ```bash
+    docker-compose ps
+    docker-compose logs postgres
+    ```
+
+    If needed, reset the database:
+
+    ```bash
+    docker-compose down -v
+    docker-compose up --build
+    ```
+  </Accordion>
+
+  <Accordion title="Module not found errors">
+    Rebuild the containers to reinstall dependencies:
+
+    ```bash
+    docker-compose down
+    docker-compose up --build
+    ```
+  </Accordion>
+
+  <Accordion title="Prisma migration errors">
+    Reset Prisma migrations:
+
+    ```bash
+    docker exec -it pcfix-api npx prisma migrate reset
+    docker exec -it pcfix-api npx prisma migrate deploy
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that you have PC Fix running locally:
+
+<CardGroup cols={2}>
+  <Card title="Explore the Codebase" icon="code">
+    - Frontend: `packages/web/src/`
+    - Backend: `packages/api/src/`
+    - Database: `packages/api/prisma/schema.prisma`
+  </Card>
+  <Card title="Read Full Installation Guide" icon="book" href="/installation">
+    Learn about manual setup without Docker and advanced configuration
+  </Card>
+  <Card title="Configure External Services" icon="plug">
+    Set up Cloudinary, MercadoPago, and other integrations
+  </Card>
+  <Card title="Run Tests" icon="check">
+    ```bash
+    docker exec -it pcfix-api npm test
+    docker exec -it pcfix-web npm test
+    ```
+  </Card>
+</CardGroup>
